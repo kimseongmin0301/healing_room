@@ -2,10 +2,10 @@
 //  - 로비: 방 카드 목록 (lobby.js)
 //  - 방: 배경 + 효과(scene.js, effects/*), 함께 듣는 음악(music.js), 환경음(audio/mixer.js), 실시간 연결(room-socket.js)
 import { Scene } from './scene.js';
-import { api } from './api.js';
+import { api, store } from './api.js';
 import { connectRoom } from './room-socket.js';
 import { showLobby, hideLobby } from './lobby.js';
-import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted } from './music.js';
+import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAudible } from './music.js';
 import { enterMixer, leaveMixer, setAmbientEnabled } from './audio/mixer.js';
 
 const $ = id => document.getElementById(id);
@@ -13,7 +13,9 @@ const scene = new Scene($('scene'));
 
 let current = null;   // { id, effect, media }
 let socket = null;
-let soundOn = false;
+let musicOn = false;      // 음악(YouTube) 소리
+let ambientOn = false;    // 환경음
+let ambientPaused = false; // 음악 때문에 환경음을 자동으로 끈 상태 (음악이 멈추면 다시 켠다)
 let enterSeq = 0;     // 방을 빠르게 바꿀 때 늦게 끝난 로딩을 버리기 위한 번호
 let t = 0;
 
@@ -102,7 +104,9 @@ function showLobbyView() {
   document.body.classList.remove('in-room');
   document.title = '힐링룸';
   showLobby(id => {
-    setSound(true); // 카드를 누른 순간(사용자 클릭)이라 브라우저가 소리를 허용한다
+    // 카드를 누른 순간(사용자 클릭)이라 브라우저가 소리를 허용한다. 마지막으로 고른 켜짐/꺼짐을 따른다
+    setMusic(store.get('musicOn', true));
+    setAmbient(store.get('ambientOn', true));
     location.hash = id;
   });
 }
@@ -112,20 +116,52 @@ function route() {
   if (id) enterRoom(id); else showLobbyView();
 }
 
-// ---------------------------------------------------------------- 소리
+// ---------------------------------------------------------------- 소리: 음악과 환경음은 따로 켜고 끈다
 
-function setSound(on) {
-  soundOn = on;
-  $('sound').textContent = on ? '소리 끄기' : '소리 켜기';
-  $('sound').classList.toggle('on', !on); // 꺼져 있을 때 눈에 띄게
-  setAmbientEnabled(on);
-  setMusicMuted(!on);
+function renderSoundButtons() {
+  $('music-sound').textContent = musicOn ? '음악 끄기' : '음악 켜기';
+  $('music-sound').classList.toggle('on', !musicOn); // 꺼져 있을 때 눈에 띄게
+  $('ambient-sound').textContent = ambientOn ? '환경음 끄기' : ambientPaused ? '환경음 쉬는 중' : '환경음 켜기';
+  $('ambient-sound').classList.toggle('on', !ambientOn && !ambientPaused);
+  $('mixer-note').hidden = !ambientPaused;
 }
+
+function setMusic(on) {
+  musicOn = on;
+  setMusicMuted(!on);
+  renderSoundButtons();
+}
+
+function setAmbient(on) {
+  ambientOn = on;
+  ambientPaused = false;
+  setAmbientEnabled(on);
+  renderSoundButtons();
+}
+
+// 음악이 들리기 시작하면 환경음을 잠시 끄고, 음악이 멈추면 (자동으로 껐던 경우에만) 다시 켠다
+onMusicAudible(audible => {
+  if (audible && ambientOn) {
+    ambientOn = false;
+    ambientPaused = true;
+    setAmbientEnabled(false);
+  } else if (!audible && ambientPaused) {
+    ambientOn = true;
+    ambientPaused = false;
+    setAmbientEnabled(true);
+  }
+  renderSoundButtons();
+});
 
 // ---------------------------------------------------------------- 시작
 
 $('back').onclick = () => { location.hash = ''; };
-$('sound').onclick = () => setSound(!soundOn);
+$('music-sound').onclick = () => { setMusic(!musicOn); store.set('musicOn', musicOn); };
+$('ambient-sound').onclick = () => {
+  // 음악 때문에 쉬는 중에 누르면 "다시 켜기"로 본다 (직접 켠 것은 음악이 나와도 유지)
+  setAmbient(!ambientOn);
+  store.set('ambientOn', ambientOn);
+};
 $('fx').onclick = e => {
   scene.fxOn = !scene.fxOn;
   e.target.textContent = scene.fxOn ? '효과 끄기' : '효과 켜기';
@@ -134,7 +170,7 @@ scene.canvas.onclick = e => current?.effect.click(...scene.toUV(e.clientX, e.cli
 addEventListener('hashchange', route);
 
 initMusic();
-setSound(false);
+renderSoundButtons();
 route();
 
 (function loop() {

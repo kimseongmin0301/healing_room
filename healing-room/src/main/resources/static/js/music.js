@@ -15,6 +15,30 @@ let muted = true;
 let syncTimer = null;
 let tab = 'queue';        // 'queue' 다음 곡 / 'history' 지난 신청곡
 let errorVotedItemId = null;
+let volume = store.get('musicVolume', 70);
+
+// ---------------------------------------------------------------- "음악이 들리는 중" 알림
+// 음악이 소리를 내며 재생되는 동안에는 환경음을 끄기 위해, 들리기 시작/멈춤을 밖(app.js)에 알린다.
+// 곡과 곡 사이에 잠깐 멈추는 것으로 환경음이 깜빡이지 않도록, 멈춤은 조금 기다렸다가 알린다
+const QUIET_DELAY = 4000;
+let audible = false;
+let audibleListener = null;
+let quietTimer = null;
+
+function setAudible(value, { immediate = false } = {}) {
+  clearTimeout(quietTimer);
+  if (value) {
+    if (!audible) { audible = true; audibleListener?.(true); }
+    return;
+  }
+  const quiet = () => { if (audible) { audible = false; audibleListener?.(false); } };
+  if (immediate) quiet(); else quietTimer = setTimeout(quiet, QUIET_DELAY);
+}
+
+/** 음악이 들리기 시작하면 fn(true), 멈추면 fn(false) */
+export function onMusicAudible(fn) {
+  audibleListener = fn;
+}
 
 // ---------------------------------------------------------------- YouTube 플레이어
 
@@ -33,10 +57,11 @@ function ensurePlayer() {
   playerReady ??= loadYouTubeApi().then(() => new Promise(resolve => {
     player = new YT.Player('yt-player', {
       width: '356', height: '200',
-      // 브라우저 자동재생 정책 때문에 음소거로 시작하고, "소리 켜기"를 누르면 소리를 켠다
-      playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0, controls: 1 },
+      // 브라우저 자동재생 정책 때문에 음소거로 시작하고, "음악 켜기"를 누르면 소리를 켠다
+      // controls·disablekb·fs: 일시정지, 탐색, 키보드 조작을 없애 모두 같은 위치로 듣게 한다 (볼륨은 따로 슬라이더)
+      playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3 },
       events: {
-        onReady: () => resolve(player),
+        onReady: () => { player.setVolume(volume); resolve(player); },
         onStateChange: onPlayerStateChange,
         onError: onPlayerError,
       },
@@ -49,6 +74,9 @@ function onPlayerStateChange(e) {
   if (e.data === YT.PlayerState.PLAYING) {
     if (!muted) player.unMute();
     reportDuration();
+    setAudible(!muted);
+  } else if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) {
+    setAudible(false);
   }
 }
 
@@ -86,6 +114,7 @@ async function sync() {
   if (!np) {
     loadedItemId = null;
     p.stopVideo();
+    setAudible(false, { immediate: true });
     return;
   }
   if (np.id !== loadedItemId) {
@@ -99,8 +128,14 @@ async function sync() {
     if (muted) p.mute(); else p.unMute();
     return;
   }
-  // 라이브(길이 없음)가 아니고 재생 중일 때만 위치를 맞춘다. 직접 멈춘 경우는 존중한다
-  if (np.duration && p.getPlayerState() === YT.PlayerState.PLAYING) {
+  // 직접 조작은 막혀 있으니, 멈춰 있으면(자동재생 실패 등) 다시 재생한다
+  const playerState = p.getPlayerState();
+  if (playerState === YT.PlayerState.PAUSED || playerState === YT.PlayerState.CUED) {
+    p.playVideo();
+    return;
+  }
+  // 라이브(길이 없음)가 아닐 때만 위치를 맞춘다
+  if (np.duration && playerState === YT.PlayerState.PLAYING) {
     const expected = expectedPosition(np);
     if (Math.abs(p.getCurrentTime() - expected) > DRIFT_LIMIT) p.seekTo(expected, true);
   }
@@ -270,6 +305,16 @@ export function initMusic() {
   $('mini-title').addEventListener('click', () => currentView() === 'min' && setView('normal'));
   document.querySelectorAll('#music .tab').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
   setView(store.get('musicView', 'normal'));
+
+  // 음악 볼륨 (플레이어 조작을 막았으므로 따로 둔다)
+  $('music-volume').value = volume;
+  $('music-volume-out').textContent = volume;
+  $('music-volume').addEventListener('input', e => {
+    volume = Number(e.target.value);
+    $('music-volume-out').textContent = volume;
+    store.set('musicVolume', volume);
+    player?.setVolume(volume);
+  });
 }
 
 /** 방에 들어갈 때 */
@@ -293,6 +338,7 @@ export function leaveMusic() {
   state = null;
   loadedItemId = null;
   player?.stopVideo();
+  setAudible(false, { immediate: true });
 }
 
 /** 서버가 보낸 새 상태 */
@@ -306,6 +352,13 @@ export function applyState(next) {
 
 export function setMusicMuted(value) {
   muted = value;
+  if (muted) setAudible(false, { immediate: true });
   if (!player) return;
-  if (muted) player.mute(); else { player.unMute(); player.playVideo(); }
+  if (muted) {
+    player.mute();
+  } else {
+    player.unMute();
+    player.playVideo();
+    if (player.getPlayerState?.() === YT.PlayerState.PLAYING) setAudible(true);
+  }
 }

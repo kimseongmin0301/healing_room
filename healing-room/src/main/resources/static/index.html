@@ -31,6 +31,7 @@
       <p id="hint" class="hint"></p>
       <div class="panel mixer">
         <div class="panel-head">환경음</div>
+        <p id="mixer-note" class="mixer-note" hidden>음악이 나오는 동안 쉬고 있어요</p>
         <div id="mixer-list"></div>
       </div>
     </div>
@@ -46,7 +47,8 @@
       </div>
 
       <div id="music-body" class="music-body">
-        <div class="player"><div id="yt-player"></div></div>
+        <!-- 영상 위를 투명한 막으로 덮어 일시정지·탐색 같은 직접 조작을 막는다 (모두 같은 곡을 같은 위치로 듣기 위해) -->
+        <div class="player"><div id="yt-player"></div><div class="player-shield" aria-hidden="true"></div></div>
         <div class="now">
           <div class="now-meta">
             <span id="now-tag" class="tag"></span>
@@ -54,6 +56,11 @@
           </div>
           <button id="now-vote" class="btn" hidden></button>
         </div>
+        <label class="volume">
+          <span>음악 볼륨</span>
+          <input id="music-volume" type="range" min="0" max="100" step="1" value="70">
+          <output id="music-volume-out">70</output>
+        </label>
 
         <div class="tabs" role="tablist">
           <button class="tab on" data-tab="queue" role="tab">다음 곡 <b id="queue-count">0</b></button>
@@ -71,7 +78,8 @@
     </div>
 
     <div class="ui controls">
-      <button id="sound" class="chip">소리 켜기</button>
+      <button id="music-sound" class="chip">음악 켜기</button>
+      <button id="ambient-sound" class="chip">환경음 켜기</button>
       <button id="fx" class="chip">효과 끄기</button>
     </div>
   </section>
