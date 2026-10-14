@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>힐링룸 · 움직이는 시안</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden;
+    font-family: Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; color: #f3e9dc; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .ui { position: fixed; z-index: 2; }
+  .title { top: 24px; left: 28px; text-shadow: 0 2px 12px rgba(0,0,0,.6); }
+  .title h1 { margin: 0; font-size: 26px; font-weight: 600; }
+  .title p { margin: 4px 0 0; font-size: 14px; opacity: .8; }
+  .bar { bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px;
+    background: rgba(10,10,14,.55); border: 1px solid rgba(255,255,255,.12); border-radius: 999px; backdrop-filter: blur(8px); }
+  .bar button { all: unset; cursor: pointer; padding: 8px 16px; border-radius: 999px; font-size: 14px; color: #d8d2c8; white-space: nowrap; }
+  .bar button.on { background: #f3e9dc; color: #1a1410; font-weight: 600; }
+  .hint { top: 28px; right: 28px; font-size: 13px; opacity: .7; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="ui title"><h1 id="t1"></h1><p id="t2"></p></div>
+<div class="ui hint" id="hint"></div>
+<div class="ui bar">
+  <button data-room="cabin" class="on">불멍</button>
+  <button data-room="sea">바다멍</button>
+  <button id="fx">효과 끄기</button>
+</div>
+<script>
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+let W, H, DPR = Math.min(devicePixelRatio || 1, 2);
+let fxOn = true, t = 0;
+
+// 이미지 좌표(0~1)를 화면 좌표로 바꾸기 위한 cover 맞춤 정보
+let fit = { x: 0, y: 0, w: 1, h: 1 };
+const P = (u, v) => [fit.x + u * fit.w, fit.y + v * fit.h];
+
+function resize() {
+  W = innerWidth; H = innerHeight;
+  c.width = W * DPR; c.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (room) computeFit(room.img);
+}
+function computeFit(img) {
+  const s = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+  fit.w = img.naturalWidth * s; fit.h = img.naturalHeight * s;
+  fit.x = (W - fit.w) / 2; fit.y = (H - fit.h) / 2;
+}
+const rand = (a, b) => a + Math.random() * (b - a);
+
+// 이미지 일부 영역을 가로줄 단위로 흔들어 그리기 (불꽃 일렁임, 물결)
+function wobble(img, u0, v0, u1, v1, step, offsetFn) {
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const [x0, y0] = P(u0, v0), [x1, y1] = P(u1, v1);
+  const sx = u0 * iw, sw = (u1 - u0) * iw;
+  for (let y = y0; y < y1; y += step) {
+    const v = (y - fit.y) / fit.h;
+    const dx = offsetFn(v, (y - y0) / (y1 - y0));
+    ctx.drawImage(img, sx, v * ih, sw, step / fit.h * ih, x0 + dx, y, x1 - x0, step + 0.5);
+  }
+}
+
+// ---------------- 불멍 ----------------
+const cabin = {
+  src: 'cabin.webp', title: '불멍 · 겨울 오두막', sub: '12명이 함께 쉬는 중', hint: '화면을 클릭하면 장작을 넣어요',
+  fire: [0.574, 0.60], boost: 0, embers: [], snow: [],
+  windows: [[0.075, 0.03, 0.285, 0.40], [0.705, 0.10, 0.95, 0.455]],
+  lights: [[0.063, 0.553, 0.035], [0.388, 0.40, 0.025], [0.413, 0.245, 0.025], [0.969, 0.553, 0.03]],
+  init() {
+    for (let i = 0; i < 260; i++) this.snow.push({ u: Math.random(), v: Math.random(), r: rand(.6, 2.2), s: rand(.0006, .0018), w: rand(0, 6) });
+  },
+  click() { this.boost = 90; },
+  draw(img) {
+    ctx.drawImage(img, fit.x, fit.y, fit.w, fit.h);
+    if (!fxOn) return;
+    const [fu, fv] = this.fire;
+    const b = this.boost; this.boost = Math.max(0, b - 1);
+
+    // 1) 불꽃 일렁임: 아래는 고정, 위로 갈수록 크게 흔들림
+    wobble(img, 0.515, 0.36, 0.64, 0.615, 2, (v, k) =>
+      Math.sin(v * 140 - t * 0.22) * 3.2 * Math.sin(k * Math.PI) * (1 - k * 0.6) * fit.w / 1672);
+
+    // 2) 방 전체 불빛 깜빡임
+    const flick = 0.5 + 0.25 * Math.sin(t * 0.13) + 0.15 * Math.sin(t * 0.31 + 1) + Math.random() * 0.12 + b / 200;
+    ctx.globalCompositeOperation = 'lighter';
+    const [gx, gy] = P(fu, fv - 0.08);
+    let g = ctx.createRadialGradient(gx, gy, 0, gx, gy, fit.w * 0.45);
+    g.addColorStop(0, `rgba(255,130,40,${0.16 * flick})`);
+    g.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // 3) 랜턴·촛불 깜빡임
+    for (const [u, v, r] of this.lights) {
+      const [lx, ly] = P(u, v), R = r * fit.w;
+      const a = 0.22 + Math.random() * 0.12 + Math.sin(t * 0.2 + u * 50) * 0.06;
+      g = ctx.createRadialGradient(lx, ly, 0, lx, ly, R);
+      g.addColorStop(0, `rgba(255,190,90,${a})`); g.addColorStop(1, 'rgba(255,160,60,0)');
+      ctx.fillStyle = g; ctx.fillRect(lx - R, ly - R, R * 2, R * 2);
+    }
+
+    // 4) 불씨
+    const n = Math.random() < 0.5 ? 1 : 0;
+    for (let i = 0; i < n + (b > 0 ? 3 : 0); i++)
+      this.embers.push({ u: fu + rand(-0.035, 0.035), v: fv - 0.03, vu: rand(-0.0006, 0.0006), vv: -rand(0.002, 0.0045) * (1 + b / 60), l: 1, r: rand(1, 2.4) });
+    for (let i = this.embers.length - 1; i >= 0; i--) {
+      const e = this.embers[i];
+      e.u += e.vu + Math.sin(t * 0.05 + i) * 0.0004; e.v += e.vv; e.l -= 0.007;
+      if (e.l <= 0) { this.embers.splice(i, 1); continue; }
+      const [ex, ey] = P(e.u, e.v);
+      ctx.fillStyle = `rgba(255,${140 + e.l * 90},60,${e.l})`;
+      ctx.beginPath(); ctx.arc(ex, ey, e.r * fit.w / 1672, 0, 7); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    // 5) 창밖 눈 (창문 영역 안에서만)
+    ctx.fillStyle = 'rgba(240,245,255,.85)';
+    for (const [u0, v0, u1, v1] of this.windows) {
+      const [x0, y0] = P(u0, v0), [x1, y1] = P(u1, v1);
+      ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
+      for (const s of this.snow) {
+        const [sx, sy] = P(u0 + s.u * (u1 - u0) + Math.sin(t * 0.02 + s.w) * 0.004, v0 + ((s.v + t * s.s) % 1) * (v1 - v0));
+        ctx.globalAlpha = 0.5 + s.r / 5;
+        ctx.beginPath(); ctx.arc(sx, sy, s.r * fit.w / 1672, 0, 7); ctx.fill();
+      }
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+};
+
+// ---------------- 바다멍 ----------------
+const sea = {
+  src: 'sea.webp', title: '바다멍 · 달빛 바다', sub: '오늘 37분째 머무는 중', hint: '하늘을 클릭하면 별똥별이 떨어져요',
+  horizon: 0.634, moon: [0.4995, 0.571], stars: [], meteors: [], glints: [],
+  init() {
+    for (let i = 0; i < 160; i++) this.stars.push({ u: Math.random(), v: Math.random() * 0.58, r: rand(.6, 1.6), p: rand(0, 7), s: rand(.02, .06) });
+  },
+  click(u, v) { if (v < this.horizon) this.meteors.push({ u, v, l: 1 }); },
+  draw(img) {
+    ctx.drawImage(img, fit.x, fit.y, fit.w, fit.h);
+    if (!fxOn) return;
+    const k = fit.w / 1672;
+
+    // 1) 물결: 수평선 아래를 줄마다 좌우로 흔듦 (가까울수록 크게)
+    wobble(img, 0, this.horizon + 0.002, 1, 1, 2, (v, d) =>
+      (Math.sin(v * 260 - t * 0.045) * 0.6 + Math.sin(v * 90 + t * 0.03) * 0.4) * (0.4 + d * 4) * k);
+
+    ctx.globalCompositeOperation = 'lighter';
+    // 2) 달빛 반사 반짝임
+    if (Math.random() < 0.9) this.glints.push({ u: 0.5 + rand(-1, 1) * rand(0, 1) * 0.05, v: rand(this.horizon + 0.005, 1), l: 1 });
+    for (let i = this.glints.length - 1; i >= 0; i--) {
+      const g = this.glints[i]; g.l -= 0.04;
+      if (g.l <= 0) { this.glints.splice(i, 1); continue; }
+      const spread = (g.v - this.horizon) / (1 - this.horizon);
+      const [gx, gy] = P(0.5 + (g.u - 0.5) * (0.4 + spread * 2), g.v);
+      ctx.fillStyle = `rgba(255,236,190,${g.l * 0.7})`;
+      ctx.fillRect(gx - 6 * k * (1 + spread * 2), gy, 12 * k * (1 + spread * 2), 1.4);
+    }
+    // 3) 달 은은한 맥동
+    const [mx, my] = P(...this.moon), pulse = 0.08 + Math.sin(t * 0.02) * 0.03;
+    let gr = ctx.createRadialGradient(mx, my, 0, mx, my, 160 * k);
+    gr.addColorStop(0, `rgba(255,236,190,${pulse})`); gr.addColorStop(1, 'rgba(255,236,190,0)');
+    ctx.fillStyle = gr; ctx.fillRect(mx - 160 * k, my - 160 * k, 320 * k, 320 * k);
+    // 4) 별 반짝임
+    for (const s of this.stars) {
+      const a = Math.max(0, Math.sin(t * s.s + s.p)) ** 3;
+      const [sx, sy] = P(s.u, s.v);
+      ctx.fillStyle = `rgba(230,236,255,${a})`;
+      ctx.beginPath(); ctx.arc(sx, sy, s.r * k * 1.3, 0, 7); ctx.fill();
+    }
+    // 5) 별똥별
+    if (Math.random() < 0.004) this.meteors.push({ u: rand(0.3, 0.95), v: rand(0.03, 0.25), l: 1 });
+    for (let i = this.meteors.length - 1; i >= 0; i--) {
+      const m = this.meteors[i]; m.u -= 0.006; m.v += 0.0035; m.l -= 0.02;
+      if (m.l <= 0) { this.meteors.splice(i, 1); continue; }
+      const [x, y] = P(m.u, m.v);
+      const lg = ctx.createLinearGradient(x, y, x + 90 * k, y - 50 * k);
+      lg.addColorStop(0, `rgba(255,255,255,${m.l})`); lg.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.strokeStyle = lg; ctx.lineWidth = 2 * k; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90 * k, y - 50 * k); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+const rooms = { cabin, sea };
+let room = null;
+function enter(name) {
+  const r = rooms[name];
+  if (!r.img) { r.img = new Image(); r.img.src = r.src; r.init(); }
+  const go = () => { room = r; computeFit(r.img); };
+  r.img.complete ? go() : (r.img.onload = go);
+  document.getElementById('t1').textContent = r.title;
+  document.getElementById('t2').textContent = r.sub;
+  document.getElementById('hint').textContent = r.hint;
+  document.querySelectorAll('[data-room]').forEach(b => b.classList.toggle('on', b.dataset.room === name));
+}
+document.querySelectorAll('[data-room]').forEach(b => b.onclick = () => enter(b.dataset.room));
+document.getElementById('fx').onclick = e => { fxOn = !fxOn; e.target.textContent = fxOn ? '효과 끄기' : '효과 켜기'; };
+c.onclick = e => room && room.click((e.clientX - fit.x) / fit.w, (e.clientY - fit.y) / fit.h);
+addEventListener('resize', resize);
+resize(); enter('cabin');
+
+(function loop() {
+  t++;
+  if (room) { ctx.clearRect(0, 0, W, H); room.draw(room.img); }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

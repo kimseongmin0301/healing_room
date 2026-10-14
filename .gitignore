@@ -1,0 +1,14 @@
+# 비밀 정보
+.env
+*.env
+!.env.example
+
+# 로컬 도구 설정
+.claude/
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
