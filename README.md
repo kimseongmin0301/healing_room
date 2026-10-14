@@ -59,7 +59,7 @@ cp healing-room/.env.example healing-room/.env
 | `REDIS_*` | Redis 접속 정보 (현재 사용하지 않음, 서버 여러 대로 확장할 때 사용 예정) |
 | `YOUTUBE_API_KEY` | (선택) YouTube Data API v3 키. "비슷한 영상" 추천에 써요. 비워 두면 그 추천만 꺼져요 |
 
-> **YouTube API 키 받는 법**: [Google Cloud Console](https://console.cloud.google.com/) → 프로젝트 만들기 → "API 및 서비스 → 라이브러리"에서 **YouTube Data API v3** 사용 설정 → "사용자 인증 정보 → API 키 만들기". 키를 `.env`의 `YOUTUBE_API_KEY=`에 넣고 서버를 다시 시작하세요. 무료 할당량은 하루 10,000이고, 검색 한 번에 100을 써요(같은 곡은 12시간 캐시).
+> **YouTube API 키 받는 법**: [Google Cloud Console](https://console.cloud.google.com/) → 프로젝트 만들기 → "API 및 서비스 → 라이브러리"에서 **YouTube Data API v3** 사용 설정 → "사용자 인증 정보 → API 키 만들기". 키를 `.env`의 `YOUTUBE_API_KEY=`에 넣고 서버를 다시 시작하세요. 무료 할당량은 하루 10,000이고, 검색 한 번에 100을 써요(같은 곡은 12시간 캐시). 추천에는 다른 사이트에서 재생 가능한 **음악 카테고리 영상만** 나오고, 재생이 막히기 쉬운 라이브 방송은 빼요.
 
 ### 3. DB 만들기 (최초 1회)
 관리자 계정으로 DB를 만들고, 앱 계정을 소유자로 지정합니다.

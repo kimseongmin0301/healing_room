@@ -30,6 +30,7 @@ import tools.jackson.databind.JsonNode;
 public class YouTubeSearchClient {
 
     private static final Logger log = LoggerFactory.getLogger(YouTubeSearchClient.class);
+    private static final String MUSIC_CATEGORY = "10"; // YouTube 영상 카테고리 "음악"
 
     private record Cached(Instant expiresAt, List<VideoSuggestion> videos) {
     }
@@ -67,6 +68,7 @@ public class YouTubeSearchClient {
                     .uri(builder -> builder.scheme("https").host("www.googleapis.com").path("/youtube/v3/search")
                             .queryParam("part", "snippet")
                             .queryParam("type", "video")
+                            .queryParam("videoCategoryId", MUSIC_CATEGORY)
                             .queryParam("videoEmbeddable", "true")
                             .queryParam("safeSearch", "moderate")
                             .queryParam("maxResults", "10")
@@ -79,7 +81,9 @@ public class YouTubeSearchClient {
             if (body != null) {
                 for (JsonNode item : body.path("items")) {
                     String id = item.path("id").path("videoId").asString("");
-                    if (!id.isEmpty() && !id.equals(videoId)) {
+                    // 라이브·예정 방송은 다른 사이트에서 재생이 막힌 경우가 많아(오류 150) 뺀다
+                    boolean live = !"none".equals(item.path("snippet").path("liveBroadcastContent").asString("none"));
+                    if (!id.isEmpty() && !id.equals(videoId) && !live) {
                         videos.add(new VideoSuggestion(id, unescape(item.path("snippet").path("title").asString("")), null));
                     }
                 }

@@ -196,7 +196,7 @@ cd healing-room
 
 ### 곡 추천 (RecommendService)
 - **내가 자주 신청한 곡**: 서버가 아니라 브라우저 `localStorage.myRequests`(최대 100곡, 신청 횟수·마지막 시각)에 저장합니다.
-- **비슷한 영상**: YouTube Data API `search`(`videoEmbeddable=true`)로 지금 곡 제목을 검색합니다. YouTube가 "연관 영상" 검색을 없애서 제목 검색 방식을 씁니다. 같은 곡은 12시간 캐시합니다.
+- **비슷한 영상**: YouTube Data API `search`로 지금 곡 제목을 검색합니다(YouTube가 "연관 영상" 검색을 없애서 제목 검색 방식). 조건: `videoEmbeddable=true`, `videoCategoryId=10`(음악), 라이브·예정 방송(`liveBroadcastContent != none`) 제외 — 라이브는 다른 사이트에서 재생이 막히는 경우가 많아서입니다. 같은 곡은 12시간 캐시합니다. 키가 없거나 할당량 초과·오류면 빈 목록이고 나머지 추천은 그대로 나옵니다.
 - **함께 신청된 곡**: 같은 방에서 앞뒤 3시간 안에 함께 신청된 곡 (함께 신청된 방이 많은 순).
 - **테마 인기곡**: 같은 테마의 방들에서 최근 30일 동안 많이 신청된 곡. 기본 음악은 세지 않습니다.
 
