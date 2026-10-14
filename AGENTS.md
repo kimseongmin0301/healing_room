@@ -11,12 +11,15 @@
 
 ## 1. 프로젝트 한 줄 요약
 
-**힐링룸(Healing Room)**: 불멍, 바다멍 같은 테마 방에 들어가 실사 배경, 움직이는 효과, 환경음, **함께 듣는 YouTube 음악**으로 쉬는 웹 서비스입니다.
+**힐링룸(Healing Room)**: 불멍, 바다멍 같은 테마를 골라 방을 만들고, 실사 배경, 움직이는 효과, 환경음, **함께 듣는 YouTube 음악**으로 쉬는 웹 서비스입니다.
 
 - **로그인이 없습니다(만들지 않음).** 브라우저마다 UUID(방문자 id)를 만들어 localStorage에 두고 씁니다.
-- 같은 방에 있는 사람은 **같은 곡을 같은 위치로** 듣습니다(라디오처럼 동기화).
-- 누구나 YouTube 링크로 곡을 신청할 수 있습니다(개수 제한 없음). 대기열이 비면 방 기본 음악이 순서대로 나옵니다.
-- 다른 사람이 신청한 곡을 넘기거나 빼려면 **방 인원의 50%를 넘는(과반) 투표**가 필요합니다. 내가 신청한 곡은 바로 넘기거나 뺄 수 있어요.
+- **테마(theme)**는 배경, 효과, 환경음, 기본 음악의 묶음입니다. **방(room)**은 누구나 이름과 테마를 골라 만들 수 있고, 아무도 없는 채로 **30분**이 지나면 닫힙니다. 테마마다 하나씩 있는 **기본 방**(cabin, sea)은 닫히지 않습니다.
+- **방장** = 지금 방에 있는 사람 중 가장 먼저 들어온 사람(보통 방을 만든 사람). 방장이 나가면 그다음에 들어온 사람이 방장이 됩니다. 새로고침처럼 20초 안에 돌아오면 자리를 지켜 줍니다.
+- 같은 방에 있는 사람은 **같은 곡을 같은 위치로** 듣습니다(라디오처럼 동기화). 영상은 직접 조작할 수 없고, **방장만** 모두의 재생을 멈추고/이어 틀고/위치를 옮길 수 있습니다.
+- 누구나 YouTube 링크로 곡을 신청할 수 있습니다(개수 제한 없음). 대기열이 비면 테마 기본 음악이 순서대로 나옵니다.
+- 넘기기/빼기: **내 신청곡**과 **방장**은 바로, 그 밖에는 **방 인원의 50%를 넘는(과반) 투표**가 필요합니다. 대기열 순서는 방장만 바꿉니다.
+- 곡 추천: 내 신청 기록(브라우저), YouTube에서 찾은 비슷한 영상(API 키 필요), 함께 신청된 곡, 테마 인기곡.
 
 ## 2. 기술 스택
 
@@ -44,28 +47,41 @@
    └─ src/main/java/com/healingroom/
       ├─ HealingRoomApplication.java
       ├─ domain/
-      │  ├─ room/                   ← 방
-      │  │  ├─ controller/          RoomController           GET /api/rooms, /api/rooms/{id}
-      │  │  ├─ service/             RoomService
-      │  │  ├─ repository/          RoomRepository, RoomAmbientRepository
-      │  │  ├─ entity/              Room, RoomAmbient
-      │  │  └─ dto/                 RoomResponse, RoomDetailResponse
-      │  ├─ queue/                  ← 함께 듣는 음악 (대기열·투표)
+      │  ├─ theme/                  ← 테마 (배경·효과·환경음·기본 음악)
+      │  │  ├─ controller/          ThemeController          GET /api/themes
+      │  │  ├─ service/             ThemeService
+      │  │  ├─ repository/          ThemeRepository, ThemeAmbientRepository, ThemeTrackRepository
+      │  │  ├─ entity/              Theme, ThemeAmbient, ThemeTrack(기본 음악)
+      │  │  └─ dto/                 ThemeResponse, AmbientResponse
+      │  ├─ room/                   ← 방 (만들기, 목록, 빈 방 닫기)
+      │  │  ├─ controller/          RoomController           GET/POST /api/rooms, GET /api/rooms/{id}
+      │  │  ├─ service/             RoomService (1분마다 30분 넘게 빈 방 닫기)
+      │  │  ├─ repository/          RoomRepository
+      │  │  ├─ entity/              Room
+      │  │  ├─ dto/                 RoomResponse, RoomDetailResponse, CreateRoomRequest
+      │  │  └─ exception/           RoomException
+      │  ├─ queue/                  ← 함께 듣는 음악 (대기열·투표·방장 조작)
       │  │  ├─ controller/          QueueController          /api/rooms/{roomId}/queue/**
       │  │  ├─ service/             QueueService(핵심 로직), VotePolicy(과반 규칙)
-      │  │  ├─ repository/          QueueItemRepository, QueueVoteRepository, DefaultTrackRepository
-      │  │  ├─ entity/              QueueItem, QueueVote, QueueStatus, DefaultTrack
-      │  │  ├─ dto/                 PlayerState, QueueHistoryResponse, QueueAddRequest, DurationRequest
+      │  │  ├─ repository/          QueueItemRepository, QueueVoteRepository
+      │  │  ├─ entity/              QueueItem(멈춤·위치·순서 포함), QueueVote, QueueStatus
+      │  │  ├─ dto/                 PlayerState, QueueHistoryResponse, QueueAdd*, DurationRequest, PlaybackRequest, MoveRequest
       │  │  ├─ event/               QueueChangedEvent (상태가 바뀌면 발행 → WebSocket 으로 전송)
-      │  │  ├─ exception/           QueueException (화면에 보여줄 메시지 포함)
+      │  │  ├─ exception/           QueueException
       │  │  ├─ client/              YouTubeOEmbedClient (영상 제목 조회, API 키 불필요)
       │  │  └─ util/                YouTubeLinks (링크 → 영상 id)
-      │  └─ presence/               ← 방 접속(누가 어느 방에 있는지)
+      │  ├─ recommend/              ← 곡 추천
+      │  │  ├─ controller/          RecommendController      GET /api/rooms/{roomId}/recommendations
+      │  │  ├─ service/             RecommendService
+      │  │  ├─ repository/          RecommendRepository (JdbcClient 집계 SQL: 테마 인기곡, 함께 신청된 곡)
+      │  │  ├─ client/              YouTubeSearchClient (YouTube Data API 검색, 12시간 캐시)
+      │  │  └─ dto/                 RecommendationResponse, VideoSuggestion
+      │  └─ presence/               ← 방 접속(누가 어느 방에 있는지, 방장)
       │     ├─ handler/             RoomSocketHandler (WebSocket 연결/해제, 상태 전송)
-      │     └─ service/             RoomSessionRegistry (방별 접속자, 메모리)
+      │     └─ service/             RoomSessionRegistry (방별 접속자·들어온 순서·방장, 메모리)
       └─ global/
          ├─ config/                 WebSocketConfig
-         └─ exception/              GlobalExceptionHandler (@RestControllerAdvice → { "message": ... })
+         └─ exception/              ApiException(공통 부모), GlobalExceptionHandler (→ { "message": ... })
 
    src/main/resources/
       ├─ application.properties
@@ -74,9 +90,9 @@
          └─ js/
             ├─ app.js               진입점: #방id 라우팅(로비 ↔ 방), 애니메이션 루프
             ├─ api.js               fetch 래퍼, 방문자 id(UUID), localStorage 도우미
-            ├─ lobby.js             로비 방 카드 + 인원
+            ├─ lobby.js             로비 방 카드 + 인원, 방 만들기
             ├─ room-socket.js       WebSocket 연결·재연결
-            ├─ music.js             YouTube 플레이어 동기화, 대기열/지난 신청곡/투표 UI, 창 최소화·최대화
+            ├─ music.js             YouTube 플레이어 동기화, 방장 조작, 대기열/지난 신청곡/추천 탭, 내 신청 기록, 창 최소화·최대화
             ├─ scene.js             캔버스 공통 도구 (cover 맞춤, 좌표 변환, wobble, glow, 배경 영상)
             ├─ audio/sounds.js      환경음 합성 (fire, wind, rain, waves, crickets)
             ├─ audio/mixer.js       환경음 믹서 UI
@@ -123,6 +139,9 @@ cd healing-room
 | `V2__seed_room.sql` | 기본 방 2개 (cabin, sea) | ✅ |
 | `V3__ambient_playlist_video.sql` | 배경 영상 컬럼, room_ambient, room_playlist(기본 음악), room_queue_item, room_queue_vote | ✅ |
 | `V4__replace_default_tracks.sql` | 기본 음악 교체 (임베드 가능한 영상으로) | ✅ |
+| `V5__theme_and_rooms.sql` | room→theme, room_ambient→theme_ambient, room_playlist→theme_track 로 이름 변경. 새 room(사용자 방) 테이블, 기본 방 cabin·sea 생성, 대기열에 paused_at·queue_order 추가 | ✅ |
+
+> V1~V4 파일 안의 `room` 은 지금의 `theme` 입니다(V5 에서 이름이 바뀜).
 
 ## 6. Redis (현재 미사용)
 
@@ -140,25 +159,31 @@ cd healing-room
 | `DB_USERNAME`, `DB_PASSWORD` | 앱 계정 (healing_room DB 소유자) |
 | `DB_ADMIN_USERNAME`, `DB_ADMIN_PASSWORD` | 관리자 계정, 수동 작업 전용 (앱에서 사용 금지) |
 | `REDIS_HOST`, `REDIS_PORT`, `REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_DATABASE` | Redis 접속 정보 (현재 미사용, 6절) |
+| `YOUTUBE_API_KEY` | YouTube Data API v3 키. 추천의 "비슷한 영상"에만 쓰며, 비워 두면 그 기능만 꺼짐. 검색 1번 = 하루 할당량 10,000 중 100 |
 
 `.env`는 절대 커밋하지 마세요. 새 키를 추가하면 `.env.example`도 함께 고치세요.
 
 ## 8. API
 
-방문자는 `X-Visitor-Id` 헤더(UUID)로 구분합니다. 곡 신청·투표·길이 보고는 **WebSocket으로 그 방에 접속해 있는 방문자만** 할 수 있습니다(아니면 403).
+방문자는 `X-Visitor-Id` 헤더(UUID)로 구분합니다. 곡 신청·투표·조작은 **WebSocket으로 그 방에 접속해 있는 방문자만** 할 수 있습니다(아니면 403). 방장 전용 기능은 방장이 아니면 403입니다.
 오류 응답은 `{ "message": "화면에 보여줄 문장" }` 형식입니다.
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| GET | `/api/rooms` | 방 목록 + 방별 현재 인원(`listeners`) |
-| GET | `/api/rooms/{id}` | 방 정보 + 환경음 목록(`ambients`) |
-| GET | `/api/rooms/{roomId}/queue` | 음악 상태 (재생 중 곡, 대기열, 인원, 필요한 표 수) |
+| GET | `/api/themes` | 테마 목록 (방 만들기에서 고름) |
+| GET | `/api/rooms` | 열려 있는 방 목록 (기본 방 먼저) + 테마 + 현재 인원(`listeners`) |
+| POST | `/api/rooms` | 방 만들기 `{ "name", "themeId" }` → 201. 이름 1~30자, 한 사람이 동시에 3개까지 |
+| GET | `/api/rooms/{id}` | 방 정보(테마 포함) + 환경음 목록(`ambients`). 닫힌 방은 404 |
+| GET | `/api/rooms/{roomId}/queue` | 음악 상태 (재생 중 곡, 대기열, 인원, 필요한 표 수, `hostIsMe`) |
 | GET | `/api/rooms/{roomId}/queue/history` | 지난 신청곡 최근 30곡 (played/skipped/removed) |
-| POST | `/api/rooms/{roomId}/queue` | 곡 신청 `{ "url": "YouTube 링크" }` → 201 `{ "id" }` |
-| PUT | `/api/rooms/{roomId}/queue/{itemId}/vote` | 넘기기/빼기 투표 (내 곡이면 바로 처리) → `{ "applied": bool }` |
+| POST | `/api/rooms/{roomId}/queue` | 곡 신청 `{ "url": "YouTube 링크 또는 id" }` → 201 `{ "id", "youtubeId", "title" }` |
+| PUT | `/api/rooms/{roomId}/queue/{itemId}/vote` | 넘기기/빼기 (내 곡이거나 방장이면 바로, 아니면 투표) → `{ "applied": bool }` |
 | DELETE | `/api/rooms/{roomId}/queue/{itemId}/vote` | 투표 취소 |
 | PUT | `/api/rooms/{roomId}/queue/{itemId}/duration` | 플레이어가 알아낸 영상 길이 `{ "seconds" }` |
-| WS | `/ws/rooms/{roomId}?visitorId={uuid}` | 연결돼 있는 동안 "방에 있음". 서버가 `PlayerState`(type=`state`)를 보냄 |
+| PUT | `/api/rooms/{roomId}/queue/playback` | **방장** `{ "action": "pause" \| "resume" \| "seek", "seconds"? }` |
+| PUT | `/api/rooms/{roomId}/queue/{itemId}/move` | **방장** 대기열 순서 `{ "direction": "up" \| "down" }` |
+| GET | `/api/rooms/{roomId}/recommendations` | 지금 곡 기준 추천 `{ basedOn, similar, similarAvailable, together, popular }` |
+| WS | `/ws/rooms/{roomId}?visitorId={uuid}` | 연결돼 있는 동안 "방에 있음". 서버가 `PlayerState`(type=`state`)를 보냄. 닫힌 방이면 연결 거부 |
 
 ### 함께 듣는 음악 동작 (QueueService)
 - 곡 신청 시 oEmbed로 영상 확인·제목 조회 → 대기열 맨 뒤. 기본 음악이 나오는 중이면 바로 신청곡으로 넘어갑니다.
@@ -166,6 +191,14 @@ cd healing-room
 - 투표 통과 기준: `VotePolicy.required(n) = n / 2 + 1` (과반). **방을 떠난 사람의 표는 세지 않고**, 사람이 들어오거나 나가면 다시 판정합니다.
 - 방별 `ReentrantLock` + 트랜잭션으로 한 번에 하나씩 처리하고, 끝나면 `QueueChangedEvent` → `RoomSocketHandler`가 방 전체에 각자 기준의 상태를 보냅니다. **다른 방문자의 id는 절대 응답에 넣지 않습니다.**
 - 브라우저에서 영상이 재생 불가(YouTube 오류 100/101/150)면 자동으로 넘기기에 한 표를 던집니다.
+- 방장 조작: 재생 위치 = (`paused_at` 또는 지금) − `started_at`. 멈춤은 `paused_at` 기록, 이어서 재생은 멈춰 있던 시간만큼 `started_at`을 뒤로 미룸, 위치 이동은 `started_at`을 다시 계산합니다. 멈춘 곡은 끝나지 않습니다.
+- 대기열 순서는 `queue_order`(작을수록 먼저). 새 곡은 방의 최댓값 + 1, 방장이 옮기면 이웃과 값을 맞바꿉니다.
+
+### 곡 추천 (RecommendService)
+- **내가 자주 신청한 곡**: 서버가 아니라 브라우저 `localStorage.myRequests`(최대 100곡, 신청 횟수·마지막 시각)에 저장합니다.
+- **비슷한 영상**: YouTube Data API `search`(`videoEmbeddable=true`)로 지금 곡 제목을 검색합니다. YouTube가 "연관 영상" 검색을 없애서 제목 검색 방식을 씁니다. 같은 곡은 12시간 캐시합니다.
+- **함께 신청된 곡**: 같은 방에서 앞뒤 3시간 안에 함께 신청된 곡 (함께 신청된 방이 많은 순).
+- **테마 인기곡**: 같은 테마의 방들에서 최근 30일 동안 많이 신청된 곡. 기본 음악은 세지 않습니다.
 
 ## 9. 프론트엔드 규칙
 
@@ -180,15 +213,16 @@ cd healing-room
   }
   ```
 - 좌표는 **배경 기준 0~1 비율(u, v)**로 쓰고, `scene.P(u, v)`로 화면 좌표로 바꿉니다. 크기는 `scene.k`(원본 대비 배율)를 곱합니다. 배경이 영상이면 `wobble`은 자동으로 꺼집니다.
-- 방을 추가하는 순서: ① `static/images/`에 배경 추가 → ② `db/V{n}__...sql`로 room, room_ambient, room_playlist 행 추가 → ③ `effects/{effect}.js` 작성
-- 환경음을 추가하려면 `audio/sounds.js`의 `SOUNDS`에 키를 추가하고, 같은 키를 `room_ambient.sound`에 씁니다.
+- 테마를 추가하는 순서: ① `static/images/`에 배경 추가 → ② `db/V{n}__...sql`로 theme, theme_ambient, theme_track 행과 기본 방(room, is_default=true) 추가 → ③ `effects/{effect}.js` 작성
+- 환경음을 추가하려면 `audio/sounds.js`의 `SOUNDS`에 키를 추가하고, 같은 키를 `theme_ambient.sound`에 씁니다.
 - 브라우저 저장소(localStorage)는 `api.js`의 `store`를 쓰세요(실패해도 무시).
 - **소리는 음악과 환경음을 따로 켜고 끕니다** (`app.js`의 `setMusic`, `setAmbient`).
   - 음악이 소리를 내며 재생되기 시작하면 환경음을 자동으로 끄고("환경음 쉬는 중"), 음악을 끄거나 멈추면 자동으로 껐던 환경음만 다시 켭니다. 곡 사이 잠깐 끊김에 깜빡이지 않도록 멈춤은 4초 기다렸다 알립니다(`music.js`의 `onMusicAudible`).
   - 사용자가 직접 누른 켜기/끄기는 항상 우선하며 `localStorage.musicOn`, `ambientOn`에 기억합니다.
   - 브라우저 정책상 소리는 사용자가 클릭한 뒤에만 납니다. 로비에서 카드를 누르면 기억된 설정대로 켜지고, 주소로 바로 들어오면 직접 켜야 합니다.
 - YouTube: IFrame Player API를 씁니다(API 키 불필요). 음악 창은 기본·최소화·최대화 3단계이며 `localStorage.musicView`에 기억합니다.
-  - **방문자가 재생을 조작할 수 없습니다.** `controls: 0, disablekb: 1, fs: 0`에 투명한 막(`.player-shield`)을 덮었고, 멈춰 있으면 동기화 때 다시 재생합니다. 볼륨만 별도 슬라이더(`musicVolume`)로 조절합니다.
+  - **YouTube 플레이어는 아무도 직접 조작할 수 없습니다.** `controls: 0, disablekb: 1, fs: 0`에 투명한 막(`.player-shield`)을 덮었고, 멈춰 있으면 동기화 때 다시 재생합니다. 볼륨만 별도 슬라이더(`musicVolume`)로 조절합니다.
+  - 재생 위치 바는 모두에게 보이고, **방장에게만** 멈춤 버튼과 위치 이동이 켜집니다(서버 API로 모두에게 적용). 방장에게는 대기열 ▲▼와 바로 넘기기/빼기가 보입니다.
   - 참고: YouTube 이용약관은 재생 중인 플레이어를 가리거나 200×200px보다 작게 만드는 것을 금지합니다. 최소화는 사용자 요청으로 넣은 기능이니 공개 서비스로 낼 때 다시 검토하세요.
 - 기본 음악을 추가할 때는 **임베드 재생이 되는지 꼭 확인**하세요. oEmbed가 성공해도 실제 플레이어에서 오류 150(외부 재생 금지)이 날 수 있습니다(라이브 방송에 많음).
 
@@ -207,7 +241,9 @@ cd healing-room
 - [x] 현재 인원 표시 (WebSocket)
 - [x] 환경음 믹서 (Web Audio 합성)
 - [x] 함께 듣는 음악: 곡 신청, 동기화 재생, 과반 투표로 넘기기/빼기, 기본 음악, 지난 신청곡, 창 최소화·최대화
-- [x] 배경 영상 지원 (`room.background_video`, 아직 영상 파일은 없음)
-- [ ] 방 추가: 밤하늘, 숲, 모래사장, 클럽 (배경 이미지/영상 필요)
+- [x] 배경 영상 지원 (`theme.background_video`, 아직 영상 파일은 없음)
+- [x] 방 만들기 (이름 + 테마), 방장(재생 조작·순서 바꾸기), 빈 방 30분 뒤 닫기
+- [x] 곡 추천 (내 신청 기록, 비슷한 영상, 함께 신청된 곡, 테마 인기곡)
+- [ ] 테마 추가: 밤하늘, 숲, 모래사장, 클럽 (배경 이미지/영상 필요)
 - [ ] 클럽 방 비트 효과
 - 로그인 기능은 **만들지 않습니다** (익명 서비스).

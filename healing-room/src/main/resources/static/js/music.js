@@ -106,7 +106,8 @@ function reportDuration() {
 }
 
 const serverNow = () => Date.now() + clockOffset;
-const expectedPosition = np => Math.max(0, (serverNow() - np.startedAt) / 1000);
+// 지금 들려야 하는 위치(초). 방장이 멈췄으면 멈춘 시각 기준
+const expectedPosition = np => Math.max(0, ((np.pausedAt ?? serverNow()) - np.startedAt) / 1000);
 
 async function sync() {
   const np = state?.nowPlaying;
@@ -122,14 +123,19 @@ async function sync() {
     durationSent = false;
     // 라이브 방송에 시작 위치를 주면 "녹화를 볼 수 없음" 오류가 나므로, 길이를 아는(라이브가 아닌) 영상만 위치를 지정한다.
     // 길이를 아직 모르면 0초부터 틀고, 다른 사람이 길이를 알려주면 다음 동기화 때 위치를 맞춘다
-    p.loadVideoById(np.duration
-      ? { videoId: np.youtubeId, startSeconds: expectedPosition(np) }
-      : { videoId: np.youtubeId });
+    const video = np.duration ? { videoId: np.youtubeId, startSeconds: expectedPosition(np) } : { videoId: np.youtubeId };
+    if (np.pausedAt) p.cueVideoById(video); else p.loadVideoById(video); // 방장이 멈춘 곡이면 불러오기만
     if (muted) p.mute(); else p.unMute();
     return;
   }
-  // 직접 조작은 막혀 있으니, 멈춰 있으면(자동재생 실패 등) 다시 재생한다
   const playerState = p.getPlayerState();
+  // 방장이 멈춘 상태: 모두 멈추고 위치만 맞춘다
+  if (np.pausedAt) {
+    if (playerState === YT.PlayerState.PLAYING || playerState === YT.PlayerState.BUFFERING) p.pauseVideo();
+    if (np.duration && Math.abs(p.getCurrentTime() - expectedPosition(np)) > 1.5) p.seekTo(expectedPosition(np), true);
+    return;
+  }
+  // 직접 조작은 막혀 있으니, 멈춰 있으면(자동재생 실패, 방장이 다시 재생 등) 다시 재생한다
   if (playerState === YT.PlayerState.PAUSED || playerState === YT.PlayerState.CUED) {
     p.playVideo();
     return;
@@ -147,9 +153,9 @@ function voteButton(button, track, required) {
   button.hidden = false;
   button.classList.toggle('voted', track.votedByMe);
   const verb = track.id === state.nowPlaying?.id ? '넘기기' : '빼기';
-  if (track.mine) {
+  if (track.mine || state.hostIsMe) {
     button.textContent = verb;
-    button.title = '내가 신청한 곡은 바로 넘기거나 뺄 수 있어요';
+    button.title = track.mine ? '내가 신청한 곡은 바로 넘기거나 뺄 수 있어요' : '방장은 바로 넘기거나 뺄 수 있어요';
   } else {
     button.textContent = `${track.votedByMe ? '투표 취소' : `${verb} 투표`} ${track.votes}/${required}`;
     button.title = `방 인원의 절반을 넘게(${required}명 이상) 투표하면 ${verb === '넘기기' ? '넘어가요' : '빠져요'}`;
@@ -194,16 +200,65 @@ function render() {
     const title = Object.assign(document.createElement('span'), { className: 't', textContent: track.title, title: track.title });
     const button = Object.assign(document.createElement('button'), { className: 'btn' });
     voteButton(button, track, state.required);
-    li.append(order, tag, title, button);
+    li.append(order, tag, title);
+    if (state.hostIsMe) li.append(moveButton(track, 'up', i === 0), moveButton(track, 'down', i === state.queue.length - 1));
+    li.append(button);
     list.append(li);
   });
-  if (tab === 'history' && np?.id !== lastHistoryFor) loadHistory();
+  updateProgress();
+  if (np?.id !== lastListsFor) {
+    if (tab === 'history') loadHistory();
+    if (tab === 'recommend') loadRecommend();
+  }
+}
+
+function moveButton(track, direction, disabled) {
+  const button = Object.assign(document.createElement('button'), {
+    className: 'move', type: 'button', textContent: direction === 'up' ? '▲' : '▼',
+    title: direction === 'up' ? '앞으로' : '뒤로', disabled,
+  });
+  if (disabled) button.style.visibility = 'hidden';
+  button.onclick = () => api('PUT', `/api/rooms/${roomId}/queue/${track.id}/move`, { direction })
+    .catch(e => message(e.message, true));
+  return button;
+}
+
+// ---------------------------------------------------------------- 재생 위치 (모두 보기, 방장만 조작)
+
+let seeking = false;
+
+function formatTime(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+}
+
+function updateProgress() {
+  const np = state?.nowPlaying;
+  const host = !!state?.hostIsMe;
+  const seek = $('seek');
+  $('host-toggle').hidden = !host || !np;
+  if (np) {
+    $('host-toggle').textContent = np.pausedAt ? '▶' : '❚❚';
+    $('host-toggle').title = np.pausedAt ? '모두 이어서 재생' : '모두 멈춤';
+  }
+  const position = np ? expectedPosition(np) : 0;
+  const duration = np?.duration ?? 0;
+  seek.disabled = !host || !duration;
+  seek.title = host ? (duration ? '옮기면 모두의 재생 위치가 바뀌어요' : '길이를 알 수 없는 영상(라이브)은 옮길 수 없어요')
+    : '재생 위치는 방장만 옮길 수 있어요';
+  if (!seeking) {
+    seek.max = Math.max(1, duration);
+    seek.value = Math.min(position, duration || position);
+    $('time-now').textContent = formatTime(position);
+  }
+  $('time-total').textContent = !np ? '0:00' : duration ? formatTime(duration) : 'LIVE';
 }
 
 // ---------------------------------------------------------------- 지난 신청곡
 
 const HISTORY_LABEL = { played: ['다 들음', 'played'], skipped: ['넘김', 'skipped'], removed: ['빠짐', 'removed'] };
-let lastHistoryFor = undefined;
+let lastListsFor = undefined;   // 지난 신청곡/추천을 마지막으로 불러온 시점의 재생 곡 id
 
 function timeAgo(ms) {
   const minutes = Math.round((Date.now() + clockOffset - ms) / 60000);
@@ -215,7 +270,7 @@ function timeAgo(ms) {
 
 async function loadHistory() {
   if (!roomId) return;
-  lastHistoryFor = state?.nowPlaying?.id;
+  lastListsFor = state?.nowPlaying?.id;
   const list = $('history-list');
   try {
     const items = await api('GET', `/api/rooms/${roomId}/queue/history`);
@@ -237,12 +292,79 @@ async function loadHistory() {
   }
 }
 
+// ---------------------------------------------------------------- 추천 + 내 신청 기록
+
+const MY_REQUESTS = 'myRequests';
+
+/** 신청에 성공한 곡을 브라우저에 기록한다 (자주 신청한 곡 추천용, 최대 100곡) */
+function recordRequest({ youtubeId, title }) {
+  const list = store.get(MY_REQUESTS, []);
+  const found = list.find(item => item.youtubeId === youtubeId);
+  if (found) { found.count += 1; found.lastAt = Date.now(); found.title = title; }
+  else list.push({ youtubeId, title, count: 1, lastAt: Date.now() });
+  list.sort((a, b) => b.lastAt - a.lastAt);
+  store.set(MY_REQUESTS, list.slice(0, 100));
+}
+
+function myFavorites() {
+  return store.get(MY_REQUESTS, [])
+    .sort((a, b) => b.count - a.count || b.lastAt - a.lastAt)
+    .slice(0, 10);
+}
+
+function suggestionRow({ youtubeId, title, count }, countLabel) {
+  const li = document.createElement('li');
+  li.append(Object.assign(document.createElement('span'), { className: 't', textContent: title, title }));
+  if (count && countLabel) li.append(Object.assign(document.createElement('span'), { className: 'count', textContent: countLabel(count) }));
+  const button = Object.assign(document.createElement('button'), { className: 'btn', type: 'button', textContent: '신청' });
+  button.onclick = () => request(youtubeId, button);
+  li.append(button);
+  return li;
+}
+
+function section(list, heading, items, countLabel, emptyText) {
+  list.append(Object.assign(document.createElement('div'), { className: 'rec-section', textContent: heading }));
+  if (!items.length) {
+    list.append(Object.assign(document.createElement('div'), { className: 'rec-note', textContent: emptyText }));
+    return;
+  }
+  const ol = Object.assign(document.createElement('ol'), { className: 'rec-items' });
+  items.forEach(item => ol.append(suggestionRow(item, countLabel)));
+  list.append(ol);
+}
+
+async function loadRecommend() {
+  if (!roomId) return;
+  lastListsFor = state?.nowPlaying?.id;
+  const list = $('recommend-list');
+  list.replaceChildren(Object.assign(document.createElement('div'), { className: 'rec-note', textContent: '추천을 불러오는 중…' }));
+  let data = null;
+  try {
+    data = await api('GET', `/api/rooms/${roomId}/recommendations`);
+  } catch {
+    // 서버 추천을 못 받아도 내 기록은 보여준다
+  }
+  list.replaceChildren();
+  section(list, '내가 자주 신청한 곡', myFavorites(), n => `${n}번`, '곡을 신청하면 이 브라우저에 기록돼요');
+  if (!data) {
+    list.append(Object.assign(document.createElement('div'), { className: 'rec-note', textContent: '추천을 불러오지 못했어요' }));
+    return;
+  }
+  const base = data.basedOn ? (data.basedOn.length > 24 ? data.basedOn.slice(0, 24) + '…' : data.basedOn) : '지금 곡';
+  section(list, `비슷한 영상 · ${base}`, data.similar, null,
+    data.similarAvailable ? '비슷한 영상을 찾지 못했어요' : 'YouTube API 키를 설정하면 비슷한 영상도 추천돼요');
+  section(list, '이 곡과 함께 신청된 곡', data.together, n => `${n}개 방`, '아직 함께 신청된 곡이 없어요');
+  section(list, '이 테마 인기곡 (30일)', data.popular, n => `${n}번`, '아직 신청 기록이 없어요');
+}
+
 function showTab(name) {
   tab = name;
   document.querySelectorAll('#music .tab').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
   $('queue-list').hidden = name !== 'queue';
   $('history-list').hidden = name !== 'history';
+  $('recommend-list').hidden = name !== 'recommend';
   if (name === 'history') loadHistory();
+  if (name === 'recommend') loadRecommend();
 }
 
 // 음악 창 크기: normal 기본 / min 최소화(제목만) / max 최대화 (브라우저에 기억)
@@ -268,32 +390,39 @@ function message(text, isError = false) {
 async function vote(track, { silent = false } = {}) {
   const url = `/api/rooms/${roomId}/queue/${track.id}/vote`;
   try {
-    if (track.votedByMe) {
+    if (track.votedByMe && !track.mine && !state?.hostIsMe) {
       await api('DELETE', url);
     } else {
       const { applied } = await api('PUT', url);
-      if (applied && !silent) message(track.mine ? '신청곡을 뺐어요' : '투표가 통과됐어요');
+      if (applied && !silent) message(track.mine || state?.hostIsMe ? '처리했어요' : '투표가 통과됐어요');
     }
   } catch (e) {
     if (!silent) message(e.message, true);
   }
 }
 
+/** 곡 신청 (링크 또는 영상 id). 성공하면 내 신청 기록에 남긴다 */
+async function request(url, button) {
+  if (button) button.disabled = true;
+  message('영상을 확인하는 중…');
+  try {
+    const added = await api('POST', `/api/rooms/${roomId}/queue`, { url });
+    recordRequest(added);
+    message(`신청했어요: ${added.title}`);
+    return true;
+  } catch (err) {
+    message(err.message, true);
+    return false;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function addTrack(e) {
   e.preventDefault();
   const input = $('add-url');
-  const button = e.submitter;
-  button.disabled = true;
-  message('영상을 확인하는 중…');
-  try {
-    await api('POST', `/api/rooms/${roomId}/queue`, { url: input.value });
-    input.value = '';
-    message('신청했어요');
-  } catch (err) {
-    message(err.message, true);
-  } finally {
-    button.disabled = false;
-  }
+  if (!input.value.trim()) { message('YouTube 링크를 붙여넣어 주세요', true); input.focus(); return; }
+  if (await request(input.value, e.submitter)) input.value = '';
 }
 
 // ---------------------------------------------------------------- 외부에서 쓰는 함수
@@ -305,6 +434,22 @@ export function initMusic() {
   $('mini-title').addEventListener('click', () => currentView() === 'min' && setView('normal'));
   document.querySelectorAll('#music .tab').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
   setView(store.get('musicView', 'normal'));
+
+  // 방장: 모두 멈춤/이어서 재생, 위치 옮기기
+  $('host-toggle').addEventListener('click', () => {
+    const np = state?.nowPlaying;
+    if (!np) return;
+    api('PUT', `/api/rooms/${roomId}/queue/playback`, { action: np.pausedAt ? 'resume' : 'pause' })
+      .catch(e => message(e.message, true));
+  });
+  const seek = $('seek');
+  seek.addEventListener('input', () => { seeking = true; $('time-now').textContent = formatTime(Number(seek.value)); });
+  seek.addEventListener('change', () => {
+    seeking = false;
+    api('PUT', `/api/rooms/${roomId}/queue/playback`, { action: 'seek', seconds: Number(seek.value) })
+      .catch(e => message(e.message, true));
+  });
+  setInterval(() => roomId && state && updateProgress(), 500);
 
   // 음악 볼륨 (플레이어 조작을 막았으므로 따로 둔다)
   $('music-volume').value = volume;
@@ -323,7 +468,7 @@ export function enterMusic(id) {
   state = null;
   loadedItemId = null;
   errorVotedItemId = null;
-  lastHistoryFor = undefined;
+  lastListsFor = undefined;
   message('');
   showTab('queue');
   ensurePlayer();
@@ -358,7 +503,7 @@ export function setMusicMuted(value) {
     player.mute();
   } else {
     player.unMute();
-    player.playVideo();
+    if (!state?.nowPlaying?.pausedAt) player.playVideo(); // 방장이 멈춘 상태면 그대로
     if (player.getPlayerState?.() === YT.PlayerState.PLAYING) setAudible(true);
   }
 }

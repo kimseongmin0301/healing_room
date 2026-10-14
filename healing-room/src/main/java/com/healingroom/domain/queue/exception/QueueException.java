@@ -2,18 +2,13 @@ package com.healingroom.domain.queue.exception;
 
 import org.springframework.http.HttpStatus;
 
-/** 음악 대기열 기능에서 사용자에게 보여줄 오류. message 는 화면에 그대로 표시된다. */
-public abstract class QueueException extends RuntimeException {
+import com.healingroom.global.exception.ApiException;
 
-    private final HttpStatus status;
+/** 음악 대기열 기능에서 사용자에게 보여줄 오류 */
+public abstract class QueueException extends ApiException {
 
     protected QueueException(HttpStatus status, String message) {
-        super(message);
-        this.status = status;
-    }
-
-    public HttpStatus status() {
-        return status;
+        super(status, message);
     }
 
     public static class InvalidLink extends QueueException {
@@ -43,6 +38,18 @@ public abstract class QueueException extends RuntimeException {
     public static class ItemNotFound extends QueueException {
         public ItemNotFound() {
             super(HttpStatus.NOT_FOUND, "이미 끝났거나 빠진 곡이에요.");
+        }
+    }
+
+    public static class HostOnly extends QueueException {
+        public HostOnly() {
+            super(HttpStatus.FORBIDDEN, "방장만 할 수 있어요.");
+        }
+    }
+
+    public static class NothingPlaying extends QueueException {
+        public NothingPlaying() {
+            super(HttpStatus.CONFLICT, "지금 재생 중인 곡이 없어요.");
         }
     }
 

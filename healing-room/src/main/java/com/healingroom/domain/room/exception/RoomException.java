@@ -1,0 +1,37 @@
+package com.healingroom.domain.room.exception;
+
+import org.springframework.http.HttpStatus;
+
+import com.healingroom.global.exception.ApiException;
+
+/** 방 기능에서 사용자에게 보여줄 오류 */
+public abstract class RoomException extends ApiException {
+
+    protected RoomException(HttpStatus status, String message) {
+        super(status, message);
+    }
+
+    public static class InvalidName extends RoomException {
+        public InvalidName(int maxLength) {
+            super(HttpStatus.BAD_REQUEST, "방 이름은 1~" + maxLength + "자로 지어 주세요.");
+        }
+    }
+
+    public static class ThemeNotFound extends RoomException {
+        public ThemeNotFound() {
+            super(HttpStatus.BAD_REQUEST, "테마를 골라 주세요.");
+        }
+    }
+
+    public static class TooManyRooms extends RoomException {
+        public TooManyRooms(int max) {
+            super(HttpStatus.CONFLICT, "한 사람이 동시에 열 수 있는 방은 " + max + "개까지예요. 빈 방은 30분 뒤에 닫혀요.");
+        }
+    }
+
+    public static class InvalidVisitor extends RoomException {
+        public InvalidVisitor() {
+            super(HttpStatus.BAD_REQUEST, "방문자 정보를 확인할 수 없어요. 새로고침해 주세요.");
+        }
+    }
+}

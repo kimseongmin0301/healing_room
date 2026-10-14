@@ -45,8 +45,39 @@ body:not(.in-room) canvas { display: none; }
 
 /* ---------- 로비 ---------- */
 .lobby { max-width: 1100px; margin: 0 auto; padding: 56px 20px 80px; }
+.lobby-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
 .lobby-head h1 { margin: 0; font-size: 34px; font-weight: 700; }
-.lobby-head p { margin: 8px 0 32px; color: var(--muted); }
+.lobby-head p { margin: 8px 0 0; color: var(--muted); }
+.btn.big { padding: 10px 18px; font-size: 15px; border-radius: 12px; }
+.room-card .badges { position: absolute; top: 14px; left: 14px; right: 14px; z-index: 1; display: flex; gap: 6px; }
+.room-card .theme-name { font-size: 12px; color: var(--muted); }
+
+/* 방 만들기 */
+.dialog-backdrop {
+  position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .6); padding: 16px;
+}
+.dialog { width: min(560px, 100%); padding: 22px; box-sizing: border-box; background: #17151b; }
+.dialog h2 { margin: 0 0 16px; font-size: 20px; }
+.field { display: block; margin-bottom: 14px; font-size: 13px; color: var(--muted); }
+.field > span { display: block; margin-bottom: 6px; }
+.field input {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; font-size: 15px;
+  background: rgba(0, 0, 0, .35); border: 1px solid var(--line); outline: none; color: var(--text);
+}
+.field input:focus { border-color: var(--accent); }
+.theme-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.theme-option {
+  all: unset; cursor: pointer; position: relative; aspect-ratio: 16 / 10; border-radius: 12px; overflow: hidden;
+  background: #222 center / cover no-repeat; border: 2px solid transparent;
+}
+.theme-option span {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 8px; font-size: 13px; color: var(--text);
+  background: linear-gradient(transparent, rgba(0, 0, 0, .75));
+}
+.theme-option.on { border-color: var(--accent); }
+.hint-text { margin: 4px 0 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
 .room-card {
   all: unset; cursor: pointer; position: relative; display: block; aspect-ratio: 16 / 10; border-radius: 18px;
@@ -65,6 +96,7 @@ body:not(.in-room) canvas { display: none; }
 .top-left h1 { margin: 14px 0 0; font-size: 26px; font-weight: 600; }
 .top-left p { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
 .presence { display: flex; align-items: center; gap: 6px; margin-top: 8px !important; }
+.presence .tag { margin-left: 6px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 6px var(--ok); }
 
 .top-right { top: 20px; right: 24px; width: 240px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
@@ -108,6 +140,15 @@ body:not(.in-room) canvas { display: none; }
 .now-meta { flex: 1; min-width: 0; }
 .now-meta p { margin: 4px 0 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+.progress { flex: none; display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--muted); }
+.progress input { width: 100%; margin: 0; accent-color: var(--accent); }
+.progress input:disabled { opacity: .55; }
+.progress #host-toggle[hidden] + span { grid-column: 1 / span 2; }
+.list .move { all: unset; cursor: pointer; width: 20px; text-align: center; color: var(--muted); font-size: 12px; }
+.list .move:hover { color: var(--text); }
+.rec-section { padding: 8px 0 2px; font-size: 12px; color: var(--accent); font-weight: 600; }
+.rec-note { padding: 4px 0 8px; font-size: 12px; color: var(--muted); }
+.list .count { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .volume { flex: none; display: grid; grid-template-columns: auto 1fr 28px; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted); }
 .volume input { width: 100%; margin: 0; accent-color: var(--accent); }
 .volume output { text-align: right; }
@@ -153,3 +194,4 @@ body:not(.in-room) canvas { display: none; }
   .controls { top: 20px; right: 16px; bottom: auto; }
   .top-left { left: 16px; }
 }
+.rec-items { list-style: none; margin: 0; padding: 0; }

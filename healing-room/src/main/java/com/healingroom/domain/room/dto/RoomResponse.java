@@ -1,26 +1,16 @@
 package com.healingroom.domain.room.dto;
 
 import com.healingroom.domain.room.entity.Room;
+import com.healingroom.domain.theme.dto.ThemeResponse;
 
 /**
- * 방 목록용 응답. 엔티티를 그대로 노출하지 않기 위해 따로 둔다.
+ * 방 목록/상세의 방 정보.
  *
  * @param listeners 지금 방에 접속해 있는 사람 수
  */
-public record RoomResponse(
-        String id,
-        String name,
-        String title,
-        String subtitle,
-        String hint,
-        String background,
-        String backgroundVideo,
-        String effect,
-        int listeners
-) {
+public record RoomResponse(String id, String name, boolean isDefault, ThemeResponse theme, int listeners) {
 
-    public static RoomResponse of(Room room, int listeners) {
-        return new RoomResponse(room.getId(), room.getName(), room.getTitle(), room.getSubtitle(),
-                room.getHint(), room.getBackground(), room.getBackgroundVideo(), room.getEffect(), listeners);
+    public static RoomResponse of(Room room, ThemeResponse theme, int listeners) {
+        return new RoomResponse(room.getId(), room.getName(), room.isDefault(), theme, listeners);
     }
 }

@@ -12,10 +12,35 @@
   <!-- 로비: 방 목록 -->
   <section id="lobby" class="lobby" hidden>
     <header class="lobby-head">
-      <h1>힐링룸</h1>
-      <p>마음에 드는 방에 들어가 멍하니 쉬어 가세요</p>
+      <div>
+        <h1>힐링룸</h1>
+        <p>마음에 드는 방에 들어가 멍하니 쉬어 가세요</p>
+      </div>
+      <button id="create-open" class="btn primary big">방 만들기</button>
     </header>
+    <p id="lobby-msg" class="msg"></p>
     <div id="room-grid" class="room-grid"></div>
+
+    <!-- 방 만들기 -->
+    <div id="create-dialog" class="dialog-backdrop" hidden>
+      <form id="create-form" class="dialog panel" novalidate>
+        <h2>방 만들기</h2>
+        <label class="field">
+          <span>방 이름</span>
+          <input id="create-name" maxlength="30" placeholder="새벽 작업방" autocomplete="off">
+        </label>
+        <div class="field">
+          <span>테마</span>
+          <div id="theme-picker" class="theme-picker" role="radiogroup"></div>
+        </div>
+        <p class="hint-text">방을 만든 사람이 방장이 돼요. 방장이 나가면 그다음에 들어온 사람이 방장이 되고, 아무도 없는 채로 30분이 지나면 방이 닫혀요.</p>
+        <p id="create-msg" class="msg error"></p>
+        <div class="dialog-actions">
+          <button type="button" id="create-cancel" class="btn">취소</button>
+          <button class="btn primary">만들기</button>
+        </div>
+      </form>
+    </div>
   </section>
 
   <!-- 방 -->
@@ -24,7 +49,8 @@
       <button id="back" class="chip">← 로비</button>
       <h1 id="title"></h1>
       <p id="subtitle"></p>
-      <p class="presence"><span class="dot"></span><span id="presence-text">연결 중…</span></p>
+      <p class="presence"><span class="dot"></span><span id="presence-text">연결 중…</span>
+        <span id="host-chip" class="tag mine" hidden title="재생을 멈추거나 옮기고, 아무 곡이나 넘기거나 순서를 바꿀 수 있어요">내가 방장</span></p>
     </div>
 
     <div class="ui top-right">
@@ -49,6 +75,13 @@
       <div id="music-body" class="music-body">
         <!-- 영상 위를 투명한 막으로 덮어 일시정지·탐색 같은 직접 조작을 막는다 (모두 같은 곡을 같은 위치로 듣기 위해) -->
         <div class="player"><div id="yt-player"></div><div class="player-shield" aria-hidden="true"></div></div>
+        <!-- 재생 위치: 모두에게 보이고, 방장만 멈춤·이동 가능 -->
+        <div class="progress">
+          <button id="host-toggle" class="win" type="button" hidden title="모두 멈춤">❚❚</button>
+          <span id="time-now">0:00</span>
+          <input id="seek" type="range" min="0" max="100" step="1" value="0" disabled aria-label="재생 위치">
+          <span id="time-total">0:00</span>
+        </div>
         <div class="now">
           <div class="now-meta">
             <span id="now-tag" class="tag"></span>
@@ -65,9 +98,11 @@
         <div class="tabs" role="tablist">
           <button class="tab on" data-tab="queue" role="tab">다음 곡 <b id="queue-count">0</b></button>
           <button class="tab" data-tab="history" role="tab">지난 신청곡</button>
+          <button class="tab" data-tab="recommend" role="tab">추천</button>
         </div>
         <ol id="queue-list" class="list"></ol>
         <ol id="history-list" class="list" hidden></ol>
+        <div id="recommend-list" class="list" hidden></div>
 
         <form id="add-form" class="add">
           <input id="add-url" placeholder="YouTube 링크를 붙여넣어 신청하기" autocomplete="off" required>

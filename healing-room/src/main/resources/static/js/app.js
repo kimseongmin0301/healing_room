@@ -16,6 +16,7 @@ let socket = null;
 let musicOn = false;      // 음악(YouTube) 소리
 let ambientOn = false;    // 환경음
 let ambientPaused = false; // 음악 때문에 환경음을 자동으로 끈 상태 (음악이 멈추면 다시 켠다)
+let lobbyMessage = '';   // 로비로 돌아갈 때 보여줄 안내 (닫힌 방 등)
 let enterSeq = 0;     // 방을 빠르게 바꿀 때 늦게 끝난 로딩을 버리기 위한 번호
 let t = 0;
 
@@ -38,10 +39,10 @@ function loadVideo(src) {
   });
 }
 
-// 배경 영상이 있으면 영상, 없거나 못 불러오면 이미지
-const loadBackground = room => room.backgroundVideo
-  ? loadVideo(room.backgroundVideo).catch(() => loadImage(room.background))
-  : loadImage(room.background);
+// 테마에 배경 영상이 있으면 영상, 없거나 못 불러오면 이미지
+const loadBackground = theme => theme.backgroundVideo
+  ? loadVideo(theme.backgroundVideo).catch(() => loadImage(theme.background))
+  : loadImage(theme.background);
 
 // ---------------------------------------------------------------- 화면 전환
 
@@ -55,11 +56,13 @@ async function enterRoom(id) {
   try {
     detail = await api('GET', `/api/rooms/${encodeURIComponent(id)}`);
   } catch {
-    location.hash = ''; // 없는 방이면 로비로
+    lobbyMessage = '닫혔거나 없는 방이에요. 다른 방에 들어가거나 새로 만들어 보세요.';
+    location.hash = ''; // 없거나 닫힌 방이면 로비로
     return;
   }
   const { room, ambients } = detail;
-  const [media, effectModule] = await Promise.all([loadBackground(room), import(`./effects/${room.effect}.js`)]);
+  const { theme } = room;
+  const [media, effectModule] = await Promise.all([loadBackground(theme), import(`./effects/${theme.effect}.js`)]);
   if (seq !== enterSeq) return;
 
   leaveRoom();
@@ -70,16 +73,21 @@ async function enterRoom(id) {
 
   scene.setImage(media);
   current = { id: room.id, effect: effectModule.create(scene), media };
-  $('title').textContent = room.title;
-  $('subtitle').textContent = room.subtitle;
-  $('hint').textContent = room.hint;
+  $('title').textContent = room.name;
+  $('subtitle').textContent = room.name === theme.title ? theme.subtitle : `${theme.title} · ${theme.subtitle}`;
+  $('hint').textContent = theme.hint;
   $('presence-text').textContent = '연결 중…';
+  $('host-chip').hidden = true;
   document.title = `${room.name} · 힐링룸`;
 
   enterMixer(room.id, ambients);
   enterMusic(room.id);
   socket = connectRoom(room.id, {
-    onState: state => { applyState(state); setPresence(state.listeners); },
+    onState: state => {
+      applyState(state);
+      setPresence(state.listeners);
+      $('host-chip').hidden = !state.hostIsMe;
+    },
     onStatus: status => { if (status === 'reconnecting') $('presence-text').textContent = '다시 연결하는 중…'; },
   });
 }
@@ -108,7 +116,8 @@ function showLobbyView() {
     setMusic(store.get('musicOn', true));
     setAmbient(store.get('ambientOn', true));
     location.hash = id;
-  });
+  }, lobbyMessage);
+  lobbyMessage = '';
 }
 
 function route() {

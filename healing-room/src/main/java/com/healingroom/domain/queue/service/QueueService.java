@@ -2,6 +2,7 @@ package com.healingroom.domain.queue.service;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -21,24 +22,27 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.healingroom.domain.presence.service.RoomSessionRegistry;
 import com.healingroom.domain.queue.dto.PlayerState;
 import com.healingroom.domain.queue.dto.QueueHistoryResponse;
-import com.healingroom.domain.queue.entity.DefaultTrack;
 import com.healingroom.domain.queue.entity.QueueItem;
 import com.healingroom.domain.queue.entity.QueueStatus;
 import com.healingroom.domain.queue.entity.QueueVote;
 import com.healingroom.domain.queue.event.QueueChangedEvent;
 import com.healingroom.domain.queue.exception.QueueException;
-import com.healingroom.domain.queue.repository.DefaultTrackRepository;
 import com.healingroom.domain.queue.repository.QueueItemRepository;
 import com.healingroom.domain.queue.repository.QueueVoteRepository;
+import com.healingroom.domain.room.service.RoomService;
+import com.healingroom.domain.theme.entity.ThemeTrack;
+import com.healingroom.domain.theme.service.ThemeService;
 
 /**
  * 방마다 함께 듣는 음악 대기열을 관리한다.
  *
  * <ul>
- *   <li>누구나 곡을 등록할 수 있다. 기본 음악이 나오고 있으면 등록한 곡으로 바로 넘어간다.</li>
- *   <li>내가 등록한 곡은 바로 넘기거나 뺄 수 있다.</li>
- *   <li>다른 사람이 등록한 곡(기본 음악 포함)은 방 인원의 50%를 넘게(과반) 투표해야 넘기거나 뺄 수 있다.</li>
- *   <li>곡이 끝나면 다음 곡, 대기열이 비면 방 기본 음악을 순서대로 튼다.</li>
+ *   <li>누구나 곡을 신청할 수 있다. 기본 음악이 나오고 있으면 신청곡으로 바로 넘어간다.</li>
+ *   <li>내가 신청한 곡은 바로 넘기거나 뺄 수 있다.</li>
+ *   <li><b>방장</b>(방에 가장 먼저 들어와 있는 사람)은 모두의 재생을 멈추고/이어 틀고/위치를 옮기고,
+ *       아무 곡이나 바로 넘기거나 빼고, 대기열 순서를 바꿀 수 있다.</li>
+ *   <li>그 밖의 사람은 방 인원의 50%를 넘게(과반) 투표해야 다른 사람 곡을 넘기거나 뺄 수 있다.</li>
+ *   <li>곡이 끝나면 다음 곡, 대기열이 비면 테마 기본 음악을 순서대로 튼다.</li>
  * </ul>
  *
  * <p>같은 방의 변경은 방별 잠금으로 한 번에 하나씩 처리한다. 서버가 한 대일 때를 기준으로 한다.
@@ -46,9 +50,12 @@ import com.healingroom.domain.queue.repository.QueueVoteRepository;
 @Service
 public class QueueService {
 
+    public enum Direction { UP, DOWN }
+
     private final QueueItemRepository items;
     private final QueueVoteRepository votes;
-    private final DefaultTrackRepository defaults;
+    private final RoomService roomService;
+    private final ThemeService themeService;
     private final RoomSessionRegistry sessions;
     private final TransactionTemplate tx;
     private final ApplicationEventPublisher events;
@@ -57,13 +64,15 @@ public class QueueService {
 
     private final Map<String, ReentrantLock> locks = new ConcurrentHashMap<>();
 
-    public QueueService(QueueItemRepository items, QueueVoteRepository votes, DefaultTrackRepository defaults,
-                        RoomSessionRegistry sessions, TransactionTemplate tx, ApplicationEventPublisher events,
+    public QueueService(QueueItemRepository items, QueueVoteRepository votes, RoomService roomService,
+                        ThemeService themeService, RoomSessionRegistry sessions, TransactionTemplate tx,
+                        ApplicationEventPublisher events,
                         @Value("${healing-room.queue.end-grace-seconds}") long endGraceSeconds,
                         @Value("${healing-room.queue.max-size}") int maxQueueSize) {
         this.items = items;
         this.votes = votes;
-        this.defaults = defaults;
+        this.roomService = roomService;
+        this.themeService = themeService;
         this.sessions = sessions;
         this.tx = tx;
         this.events = events;
@@ -76,10 +85,10 @@ public class QueueService {
     /** 방 전체 음악 상태 (재생 중 곡, 대기열, 투표한 사람) */
     public PlayerState.Snapshot snapshot(String roomId) {
         return tx.execute(status -> {
-            QueueItem playing = items.findFirstByRoomIdAndStatusOrderByIdAsc(roomId, QueueStatus.PLAYING).orElse(null);
-            List<QueueItem> queued = items.findByRoomIdAndStatusOrderByIdAsc(roomId, QueueStatus.QUEUED);
+            QueueItem playing = playing(roomId).orElse(null);
+            List<QueueItem> queued = items.findByRoomIdAndStatusOrderByQueueOrderAsc(roomId, QueueStatus.QUEUED);
 
-            List<Long> ids = new java.util.ArrayList<>(queued.stream().map(QueueItem::getId).toList());
+            List<Long> ids = new ArrayList<>(queued.stream().map(QueueItem::getId).toList());
             if (playing != null) {
                 ids.add(playing.getId());
             }
@@ -92,7 +101,8 @@ public class QueueService {
     }
 
     public PlayerState stateFor(String roomId, String visitorId) {
-        return snapshot(roomId).forVisitor(visitorId, sessions.visitors(roomId), System.currentTimeMillis());
+        return snapshot(roomId).forVisitor(visitorId, sessions.visitors(roomId),
+                sessions.host(roomId).orElse(null), System.currentTimeMillis());
     }
 
     /** 지난 신청곡 (최근 30곡) */
@@ -103,18 +113,18 @@ public class QueueService {
                 .toList());
     }
 
-    // ---------------------------------------------------------------- 방문자 동작
+    // ---------------------------------------------------------------- 누구나
 
-    /** 곡 등록. 영상 확인(oEmbed)은 호출하는 쪽에서 끝낸 뒤 제목과 함께 넘긴다. */
+    /** 곡 신청. 영상 확인(oEmbed)은 호출하는 쪽에서 끝낸 뒤 제목과 함께 넘긴다. */
     public long add(String roomId, String visitorId, String youtubeId, String title) {
         requirePresent(roomId, visitorId);
         return inRoom(roomId, () -> {
             if (items.countByRoomIdAndStatus(roomId, QueueStatus.QUEUED) >= maxQueueSize) {
                 throw new QueueException.QueueFull();
             }
-            QueueItem item = items.save(new QueueItem(roomId, youtubeId, title, visitorId));
+            QueueItem item = items.save(new QueueItem(roomId, youtubeId, title, visitorId, nextOrder(roomId)));
             QueueItem playing = playing(roomId).orElse(null);
-            // 아무것도 안 나오거나 기본 음악이 나오는 중이면 바로 방문자 곡으로 넘어간다
+            // 아무것도 안 나오거나 기본 음악이 나오는 중이면 바로 신청곡으로 넘어간다
             if (playing == null || playing.isDefault()) {
                 advance(roomId, playing, QueueStatus.PLAYED);
             }
@@ -123,15 +133,15 @@ public class QueueService {
     }
 
     /**
-     * 넘기기/빼기 투표. 내가 등록한 곡이면 투표 없이 바로 처리한다.
+     * 넘기기/빼기. 내가 신청한 곡이거나 내가 방장이면 바로 처리하고, 아니면 투표로 센다.
      *
-     * @return 이번 투표로 곡이 넘겨지거나 빠졌으면 true
+     * @return 곡이 넘겨지거나 빠졌으면 true
      */
     public boolean vote(String roomId, Long itemId, String visitorId) {
         requirePresent(roomId, visitorId);
         return inRoom(roomId, () -> {
             QueueItem item = activeItem(roomId, itemId);
-            if (item.isAddedBy(visitorId)) {
+            if (item.isAddedBy(visitorId) || sessions.isHost(roomId, visitorId)) {
                 drop(roomId, item);
                 return true;
             }
@@ -164,9 +174,60 @@ public class QueueService {
         });
     }
 
+    // ---------------------------------------------------------------- 방장만
+
+    /** 모두의 재생을 멈춘다 */
+    public void pause(String roomId, String visitorId) {
+        requireHost(roomId, visitorId);
+        inRoom(roomId, () -> {
+            requirePlaying(roomId).pause(OffsetDateTime.now());
+            return null;
+        });
+    }
+
+    /** 멈춘 위치부터 모두 이어서 재생한다 */
+    public void resume(String roomId, String visitorId) {
+        requireHost(roomId, visitorId);
+        inRoom(roomId, () -> {
+            requirePlaying(roomId).resume(OffsetDateTime.now());
+            return null;
+        });
+    }
+
+    /** 모두의 재생 위치를 옮긴다 */
+    public void seek(String roomId, String visitorId, double seconds) {
+        requireHost(roomId, visitorId);
+        inRoom(roomId, () -> {
+            QueueItem playing = requirePlaying(roomId);
+            Integer duration = playing.getDurationSeconds();
+            double target = duration == null ? Math.max(0, seconds) : Math.min(Math.max(0, seconds), duration - 1);
+            playing.seek(target, OffsetDateTime.now());
+            return null;
+        });
+    }
+
+    /** 대기열에서 곡을 한 칸 앞/뒤로 옮긴다 */
+    public void move(String roomId, Long itemId, String visitorId, Direction direction) {
+        requireHost(roomId, visitorId);
+        inRoom(roomId, () -> {
+            List<QueueItem> queued = items.findByRoomIdAndStatusOrderByQueueOrderAsc(roomId, QueueStatus.QUEUED);
+            for (int i = 0; i < queued.size(); i++) {
+                if (!queued.get(i).getId().equals(itemId)) {
+                    continue;
+                }
+                int j = direction == Direction.UP ? i - 1 : i + 1;
+                if (j >= 0 && j < queued.size()) {
+                    queued.get(i).swapOrderWith(queued.get(j));
+                }
+                return null;
+            }
+            throw new QueueException.ItemNotFound();
+        });
+    }
+
     // ---------------------------------------------------------------- 상황 변화
 
-    /** 누가 들어오거나 나갔을 때. 인원이 바뀌면 투표 결과가 달라질 수 있고, 첫 입장이면 음악을 시작한다. */
+    /** 누가 들어오거나 나갔을 때. 인원(과 방장)이 바뀌면 투표 결과가 달라질 수 있고, 첫 입장이면 음악을 시작한다. */
     public void onPresenceChanged(String roomId) {
         inRoom(roomId, () -> {
             Set<String> present = sessions.visitors(roomId);
@@ -179,7 +240,7 @@ public class QueueService {
             }
             // 재생 중인 곡이 넘겨지면 대기열도 바뀌므로, 재생 중인 곡부터 차례로 다시 판정한다
             if (!decide(roomId, playing.get(), present)) {
-                for (QueueItem queued : items.findByRoomIdAndStatusOrderByIdAsc(roomId, QueueStatus.QUEUED)) {
+                for (QueueItem queued : items.findByRoomIdAndStatusOrderByQueueOrderAsc(roomId, QueueStatus.QUEUED)) {
                     decide(roomId, queued, present);
                 }
             }
@@ -187,7 +248,7 @@ public class QueueService {
         });
     }
 
-    /** 2초마다: 길이를 아는 곡 중 끝난 곡이 있으면 다음 곡으로 넘긴다. */
+    /** 2초마다: 길이를 아는 곡 중 끝난 곡이 있으면 다음 곡으로 넘긴다. (멈춘 곡은 끝나지 않는다) */
     @Scheduled(fixedDelay = 2000)
     public void advanceFinished() {
         OffsetDateTime now = OffsetDateTime.now();
@@ -235,7 +296,7 @@ public class QueueService {
             current.end(endStatus, now);
             items.flush();
         }
-        QueueItem next = items.findFirstByRoomIdAndStatusOrderByIdAsc(roomId, QueueStatus.QUEUED).orElse(null);
+        QueueItem next = items.findFirstByRoomIdAndStatusOrderByQueueOrderAsc(roomId, QueueStatus.QUEUED).orElse(null);
         if (next == null) {
             if (sessions.listenerCount(roomId) == 0) {
                 return;
@@ -249,9 +310,9 @@ public class QueueService {
         next.start(now);
     }
 
-    /** 방 기본 음악을 순서대로 돌아가며 고른다. */
+    /** 테마 기본 음악을 순서대로 돌아가며 고른다. */
     private Optional<QueueItem> nextDefault(String roomId) {
-        List<DefaultTrack> list = defaults.findByRoomIdOrderBySortOrderAsc(roomId);
+        List<ThemeTrack> list = roomService.themeIdOf(roomId).map(themeService::defaultTracks).orElse(List.of());
         if (list.isEmpty()) {
             return Optional.empty();
         }
@@ -265,12 +326,20 @@ public class QueueService {
                     return 0;
                 })
                 .orElse(0);
-        DefaultTrack track = list.get(index);
-        return Optional.of(QueueItem.defaultTrack(roomId, track.getYoutubeId(), track.getTitle()));
+        ThemeTrack track = list.get(index);
+        return Optional.of(QueueItem.defaultTrack(roomId, track.getYoutubeId(), track.getTitle(), nextOrder(roomId)));
+    }
+
+    private long nextOrder(String roomId) {
+        return items.maxQueueOrder(roomId) + 1;
     }
 
     private Optional<QueueItem> playing(String roomId) {
         return items.findFirstByRoomIdAndStatusOrderByIdAsc(roomId, QueueStatus.PLAYING);
+    }
+
+    private QueueItem requirePlaying(String roomId) {
+        return playing(roomId).orElseThrow(QueueException.NothingPlaying::new);
     }
 
     private QueueItem activeItem(String roomId, Long itemId) {
@@ -283,6 +352,13 @@ public class QueueService {
     private void requirePresent(String roomId, String visitorId) {
         if (visitorId == null || !sessions.isPresent(roomId, visitorId)) {
             throw new QueueException.NotInRoom();
+        }
+    }
+
+    private void requireHost(String roomId, String visitorId) {
+        requirePresent(roomId, visitorId);
+        if (!sessions.isHost(roomId, visitorId)) {
+            throw new QueueException.HostOnly();
         }
     }
 

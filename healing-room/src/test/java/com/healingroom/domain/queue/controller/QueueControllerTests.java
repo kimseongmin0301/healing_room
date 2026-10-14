@@ -45,7 +45,9 @@ class QueueControllerTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"url\":\"https://youtu.be/dQw4w9WgXcQ?si=abc\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(7));
+                .andExpect(jsonPath("$.id").value(7))
+                .andExpect(jsonPath("$.youtubeId").value("dQw4w9WgXcQ"))
+                .andExpect(jsonPath("$.title").value("제목"));
     }
 
     @Test
@@ -65,6 +67,47 @@ class QueueControllerTests {
 
         mvc.perform(put("/api/rooms/cabin/queue/1/vote").header("X-Visitor-Id", VISITOR))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void playbackByNonHostIsForbidden() throws Exception {
+        org.mockito.BDDMockito.willThrow(new QueueException.HostOnly()).given(queueService).pause("cabin", VISITOR);
+
+        mvc.perform(put("/api/rooms/cabin/queue/playback")
+                        .header("X-Visitor-Id", VISITOR)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"pause\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("방장만 할 수 있어요."));
+    }
+
+    @Test
+    void seekPassesSeconds() throws Exception {
+        mvc.perform(put("/api/rooms/cabin/queue/playback")
+                        .header("X-Visitor-Id", VISITOR)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"seek\",\"seconds\":42.5}"))
+                .andExpect(status().isNoContent());
+        verify(queueService).seek("cabin", VISITOR, 42.5);
+    }
+
+    @Test
+    void unknownPlaybackActionIsBadRequest() throws Exception {
+        mvc.perform(put("/api/rooms/cabin/queue/playback")
+                        .header("X-Visitor-Id", VISITOR)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"rewind\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void moveUp() throws Exception {
+        mvc.perform(put("/api/rooms/cabin/queue/5/move")
+                        .header("X-Visitor-Id", VISITOR)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"direction\":\"up\"}"))
+                .andExpect(status().isNoContent());
+        verify(queueService).move("cabin", 5L, VISITOR, QueueService.Direction.UP);
     }
 
     @Test

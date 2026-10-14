@@ -1,4 +1,4 @@
-package com.healingroom.domain.room.entity;
+package com.healingroom.domain.theme.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -8,19 +8,19 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 /**
- * 방마다 믹서에 나오는 환경음 (room_ambient 테이블).
+ * 테마별 환경음 (theme_ambient 테이블).
  * sound 는 프론트엔드 static/js/audio/sounds.js 의 키와 같아야 한다.
  */
 @Entity
-@Table(name = "room_ambient")
-public class RoomAmbient {
+@Table(name = "theme_ambient")
+public class ThemeAmbient {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "room_id", nullable = false)
-    private String roomId;
+    @Column(name = "theme_id", nullable = false)
+    private String themeId;
 
     @Column(nullable = false)
     private String sound;
@@ -34,10 +34,10 @@ public class RoomAmbient {
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
-    protected RoomAmbient() {
+    protected ThemeAmbient() {
     }
 
-    public String getRoomId() { return roomId; }
+    public String getThemeId() { return themeId; }
     public String getSound() { return sound; }
     public String getLabel() { return label; }
     public int getDefaultVolume() { return defaultVolume; }

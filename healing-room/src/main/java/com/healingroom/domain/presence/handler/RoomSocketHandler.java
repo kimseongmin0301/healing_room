@@ -57,7 +57,7 @@ public class RoomSocketHandler extends TextWebSocketHandler {
         String visitorId = uri == null ? null
                 : UriComponentsBuilder.fromUri(uri).build().getQueryParams().getFirst(VISITOR);
 
-        if (!isUuid(visitorId) || !roomService.exists(roomId)) {
+        if (!isUuid(visitorId) || !roomService.isOpen(roomId)) {
             raw.close(CloseStatus.POLICY_VIOLATION);
             return;
         }
@@ -66,7 +66,8 @@ public class RoomSocketHandler extends TextWebSocketHandler {
         raw.getAttributes().put(ROOM, roomId);
         raw.getAttributes().put(VISITOR, visitorId);
         sessions.add(roomId, visitorId, session);
-        queueService.onPresenceChanged(roomId); // 여기서 방 전체에 새 상태가 나간다
+        roomService.onPresenceChanged(roomId);
+        queueService.onPresenceChanged(roomId); // 여기서 방 전체에 새 상태(인원, 방장)가 나간다
     }
 
     @Override
@@ -74,6 +75,7 @@ public class RoomSocketHandler extends TextWebSocketHandler {
         Object roomId = session.getAttributes().get(ROOM);
         if (roomId != null) {
             sessions.remove(roomId.toString(), session.getId());
+            roomService.onPresenceChanged(roomId.toString());
             queueService.onPresenceChanged(roomId.toString());
         }
     }
@@ -93,10 +95,11 @@ public class RoomSocketHandler extends TextWebSocketHandler {
         }
         PlayerState.Snapshot snapshot = queueService.snapshot(roomId);
         var present = sessions.visitors(roomId);
+        String hostId = sessions.host(roomId).orElse(null);
         long now = System.currentTimeMillis();
         for (RoomSessionRegistry.Connection connection : connections) {
             try {
-                PlayerState state = snapshot.forVisitor(connection.visitorId(), present, now);
+                PlayerState state = snapshot.forVisitor(connection.visitorId(), present, hostId, now);
                 connection.session().sendMessage(new TextMessage(json.writeValueAsString(state)));
             } catch (IOException | IllegalStateException e) {
                 log.debug("상태 전송 실패 (room={}, session={}): {}", roomId, connection.session().getId(), e.getMessage());

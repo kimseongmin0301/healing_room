@@ -14,13 +14,17 @@
 - **살아 움직이는 배경**: 사진 위에 캔버스 효과를 얹었습니다
   - 불멍: 불꽃 일렁임, 불빛·랜턴 깜빡임, 피어오르는 불씨, 창밖에 내리는 눈. **클릭하면 장작이 들어가요**
   - 바다멍: 물결, 달빛 반짝임, 별 반짝임. **하늘을 클릭하면 별똥별이 떨어져요**
-- **로비**: 방 카드와 방마다 지금 쉬고 있는 사람 수
+- **방 만들기**: 이름과 테마(불멍, 바다멍 …)를 골라 누구나 방을 만들어요. 아무도 없는 채로 30분이 지나면 방이 닫혀요
+- **로비**: 열려 있는 방 카드와 방마다 지금 쉬고 있는 사람 수
+- **방장**: 방에 가장 먼저 들어온 사람(보통 만든 사람)이 방장이에요. 방장이 나가면 그다음에 들어온 사람이 이어받아요
 - **함께 듣는 음악 (YouTube)**
   - 같은 방 사람들은 같은 곡을 같은 위치로 들어요 (라디오처럼 동기화)
   - 누구나 YouTube 링크로 곡을 신청할 수 있어요. 신청곡이 없으면 방 기본 음악이 나와요
   - 다른 사람이 신청한 곡은 **방 인원의 과반(50% 초과)이 투표**하면 넘기거나 뺄 수 있어요. 내 신청곡은 바로 넘기거나 뺄 수 있어요
+  - **방장**은 모두의 재생을 멈추거나 위치를 옮기고, 아무 곡이나 바로 넘기거나 빼고, 순서를 바꿀 수 있어요
+  - **추천**: 내가 자주 신청한 곡(브라우저에 저장), YouTube에서 찾은 비슷한 영상, 이 곡과 함께 신청된 곡, 테마 인기곡
   - 다음 곡 목록과 지난 신청곡 목록, 음악 창 최소화·최대화
-  - 재생 위치는 모두 같아야 하므로 영상은 직접 조작할 수 없고, 볼륨만 조절할 수 있어요
+  - 재생 위치는 모두 같아야 하므로 영상은 직접 조작할 수 없고(방장은 위치 바로 조작), 볼륨만 각자 조절할 수 있어요
 - **환경음 믹서**: 장작, 바람, 비, 파도, 풀벌레 소리를 녹음 파일 없이 브라우저에서 합성하고 슬라이더로 섞어요
   - 음악과 환경음은 따로 켜고 끌 수 있고, **음악이 나오는 동안에는 환경음이 자동으로 쉬었다가** 음악이 멈추면 다시 나와요
 - **방 정보는 DB에서 관리**: 방, 환경음, 기본 음악을 SQL로 추가해요
@@ -53,6 +57,9 @@ cp healing-room/.env.example healing-room/.env
 | `DB_USERNAME` / `DB_PASSWORD` | 앱이 사용할 계정 |
 | `DB_ADMIN_USERNAME` / `DB_ADMIN_PASSWORD` | DB 생성용 관리자 계정 (앱은 사용하지 않음) |
 | `REDIS_*` | Redis 접속 정보 (현재 사용하지 않음, 서버 여러 대로 확장할 때 사용 예정) |
+| `YOUTUBE_API_KEY` | (선택) YouTube Data API v3 키. "비슷한 영상" 추천에 써요. 비워 두면 그 추천만 꺼져요 |
+
+> **YouTube API 키 받는 법**: [Google Cloud Console](https://console.cloud.google.com/) → 프로젝트 만들기 → "API 및 서비스 → 라이브러리"에서 **YouTube Data API v3** 사용 설정 → "사용자 인증 정보 → API 키 만들기". 키를 `.env`의 `YOUTUBE_API_KEY=`에 넣고 서버를 다시 시작하세요. 무료 할당량은 하루 10,000이고, 검색 한 번에 100을 써요(같은 곡은 12시간 캐시).
 
 ### 3. DB 만들기 (최초 1회)
 관리자 계정으로 DB를 만들고, 앱 계정을 소유자로 지정합니다.
@@ -103,10 +110,12 @@ cd healing-room
    └─ src/main/
       ├─ java/com/healingroom/
       │  ├─ domain/
-      │  │  ├─ room/                    방       (controller, service, repository, entity, dto)
+      │  │  ├─ theme/                   테마      (controller, service, repository, entity, dto)
+      │  │  ├─ room/                    방        (controller, service, repository, entity, dto, exception)
       │  │  ├─ queue/                   함께 듣는 음악 (controller, service, repository, entity, dto,
       │  │  │                                     event, exception, client, util)
-      │  │  └─ presence/                방 접속자 (WebSocket handler, service)
+      │  │  ├─ recommend/               곡 추천   (controller, service, repository, client, dto)
+      │  │  └─ presence/                방 접속자·방장 (WebSocket handler, service)
       │  └─ global/                     공통 설정(config), 예외 처리(exception)
       └─ resources/static/              프론트엔드
          ├─ js/                         app, lobby, music, room-socket, scene, api
@@ -118,21 +127,25 @@ cd healing-room
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| GET | `/api/rooms` | 방 목록 + 방별 현재 인원 |
-| GET | `/api/rooms/{id}` | 방 정보 + 환경음 목록 |
+| GET | `/api/themes` | 테마 목록 |
+| GET / POST | `/api/rooms` | 열려 있는 방 목록 / 방 만들기 `{ "name", "themeId" }` |
+| GET | `/api/rooms/{id}` | 방 정보(테마 포함) + 환경음 목록 |
 | GET | `/api/rooms/{roomId}/queue` | 지금 재생 중인 곡, 대기열, 투표 현황 |
 | GET | `/api/rooms/{roomId}/queue/history` | 지난 신청곡 (최근 30곡) |
 | POST | `/api/rooms/{roomId}/queue` | 곡 신청 `{ "url": "YouTube 링크" }` |
 | PUT / DELETE | `/api/rooms/{roomId}/queue/{itemId}/vote` | 넘기기·빼기 투표 / 취소 |
 | PUT | `/api/rooms/{roomId}/queue/{itemId}/duration` | 영상 길이 보고 (플레이어가 자동으로 호출) |
+| PUT | `/api/rooms/{roomId}/queue/playback` | 방장: 모두 멈춤 / 이어서 재생 / 위치 이동 |
+| PUT | `/api/rooms/{roomId}/queue/{itemId}/move` | 방장: 대기열 순서 바꾸기 |
+| GET | `/api/rooms/{roomId}/recommendations` | 곡 추천 |
 | WebSocket | `/ws/rooms/{roomId}?visitorId=...` | 방 접속. 음악 상태가 바뀔 때마다 받음 |
 
 방문자는 로그인 대신 브라우저에 저장된 UUID를 `X-Visitor-Id` 헤더로 보냅니다.
 
-## ➕ 방 추가하기
+## ➕ 테마 추가하기
 
 1. `healing-room/src/main/resources/static/images/`에 배경 이미지를 넣습니다
-2. `healing-room/db/V{다음번호}__add_{방}.sql`로 `room`, `room_ambient`(환경음), `room_playlist`(기본 음악) 행을 추가하고 실행합니다
+2. `healing-room/db/V{다음번호}__add_{테마}.sql`로 `theme`, `theme_ambient`(환경음), `theme_track`(기본 음악), 기본 방(`room`, `is_default = true`) 행을 추가하고 실행합니다
    - 기본 음악은 **다른 사이트에서 재생(임베드)이 되는 영상**인지 꼭 확인하세요. 라이브 방송은 막혀 있는 경우가 많아요
 3. `static/js/effects/{effect}.js`에 효과를 작성합니다. `cabin.js`를 복사해서 시작하면 편해요
 
@@ -162,8 +175,10 @@ export function create(scene) {
 - [x] 로비 화면 · 실시간 인원
 - [x] 환경음 믹서
 - [x] 함께 듣는 YouTube 음악 (신청, 동기화, 과반 투표, 지난 신청곡)
+- [x] 방 만들기 · 방장 · 빈 방 30분 뒤 닫기
+- [x] 곡 추천
 - [x] 배경 영상 지원 (영상 파일 준비 중)
-- [ ] 방 추가: 밤하늘, 숲, 모래사장, 클럽
+- [ ] 테마 추가: 밤하늘, 숲, 모래사장, 클럽
 
 ## 📝 참고
 

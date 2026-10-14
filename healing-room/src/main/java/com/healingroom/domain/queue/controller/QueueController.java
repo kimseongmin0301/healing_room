@@ -17,8 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.healingroom.domain.queue.client.YouTubeOEmbedClient;
 import com.healingroom.domain.queue.dto.DurationRequest;
+import com.healingroom.domain.queue.dto.MoveRequest;
+import com.healingroom.domain.queue.dto.PlaybackRequest;
 import com.healingroom.domain.queue.dto.PlayerState;
 import com.healingroom.domain.queue.dto.QueueAddRequest;
+import com.healingroom.domain.queue.dto.QueueAddResponse;
 import com.healingroom.domain.queue.dto.QueueHistoryResponse;
 import com.healingroom.domain.queue.exception.QueueException;
 import com.healingroom.domain.queue.service.QueueService;
@@ -26,7 +29,7 @@ import com.healingroom.domain.queue.util.YouTubeLinks;
 
 /**
  * 방 음악 대기열 API. 방문자는 X-Visitor-Id 헤더(브라우저에 저장된 UUID)로 구분한다.
- * 등록·투표는 WebSocket 으로 방에 접속해 있는 방문자만 할 수 있다.
+ * 신청·투표·조작은 WebSocket 으로 방에 접속해 있는 방문자만 할 수 있고, 재생 조작과 순서 바꾸기는 방장만 할 수 있다.
  */
 @RestController
 @RequestMapping("/api/rooms/{roomId}/queue")
@@ -55,18 +58,18 @@ public class QueueController {
         return queueService.history(roomId, visitorId);
     }
 
-    /** 곡 등록: YouTube 링크를 받아 대기열 맨 뒤에 넣는다. */
+    /** 곡 신청: YouTube 링크(또는 영상 id)를 받아 대기열 맨 뒤에 넣는다. */
     @PostMapping
-    public ResponseEntity<Map<String, Long>> add(@PathVariable String roomId,
-                                                 @RequestHeader(VISITOR_HEADER) String visitorId,
-                                                 @RequestBody QueueAddRequest request) {
+    public ResponseEntity<QueueAddResponse> add(@PathVariable String roomId,
+                                                @RequestHeader(VISITOR_HEADER) String visitorId,
+                                                @RequestBody QueueAddRequest request) {
         String youtubeId = YouTubeLinks.videoId(request.url()).orElseThrow(QueueException.InvalidLink::new);
         String title = oEmbed.fetchTitle(youtubeId);
         long id = queueService.add(roomId, visitorId, youtubeId, title);
-        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", id));
+        return ResponseEntity.status(HttpStatus.CREATED).body(new QueueAddResponse(id, youtubeId, title));
     }
 
-    /** 넘기기/빼기 투표 (내가 등록한 곡이면 바로 처리) */
+    /** 넘기기/빼기 (내 곡이거나 방장이면 바로 처리, 아니면 투표) */
     @PutMapping("/{itemId}/vote")
     public Map<String, Boolean> vote(@PathVariable String roomId, @PathVariable Long itemId,
                                      @RequestHeader(VISITOR_HEADER) String visitorId) {
@@ -89,4 +92,37 @@ public class QueueController {
         return ResponseEntity.noContent().build();
     }
 
+    /** 방장: 모두의 재생 멈춤 / 이어서 재생 / 위치 이동 */
+    @PutMapping("/playback")
+    public ResponseEntity<Void> playback(@PathVariable String roomId,
+                                         @RequestHeader(VISITOR_HEADER) String visitorId,
+                                         @RequestBody PlaybackRequest request) {
+        String action = request.action() == null ? "" : request.action();
+        switch (action) {
+            case "pause" -> queueService.pause(roomId, visitorId);
+            case "resume" -> queueService.resume(roomId, visitorId);
+            case "seek" -> queueService.seek(roomId, visitorId, request.seconds() == null ? 0 : request.seconds());
+            default -> {
+                return ResponseEntity.badRequest().build();
+            }
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    /** 방장: 대기열에서 한 칸 앞/뒤로 */
+    @PutMapping("/{itemId}/move")
+    public ResponseEntity<Void> move(@PathVariable String roomId, @PathVariable Long itemId,
+                                     @RequestHeader(VISITOR_HEADER) String visitorId,
+                                     @RequestBody MoveRequest request) {
+        QueueService.Direction direction;
+        if ("up".equals(request.direction())) {
+            direction = QueueService.Direction.UP;
+        } else if ("down".equals(request.direction())) {
+            direction = QueueService.Direction.DOWN;
+        } else {
+            return ResponseEntity.badRequest().build();
+        }
+        queueService.move(roomId, itemId, visitorId, direction);
+        return ResponseEntity.noContent().build();
+    }
 }
