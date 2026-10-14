@@ -1,0 +1,301 @@
+package com.healingroom.domain.queue.service;
+
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import com.healingroom.domain.presence.service.RoomSessionRegistry;
+import com.healingroom.domain.queue.dto.PlayerState;
+import com.healingroom.domain.queue.dto.QueueHistoryResponse;
+import com.healingroom.domain.queue.entity.DefaultTrack;
+import com.healingroom.domain.queue.entity.QueueItem;
+import com.healingroom.domain.queue.entity.QueueStatus;
+import com.healingroom.domain.queue.entity.QueueVote;
+import com.healingroom.domain.queue.event.QueueChangedEvent;
+import com.healingroom.domain.queue.exception.QueueException;
+import com.healingroom.domain.queue.repository.DefaultTrackRepository;
+import com.healingroom.domain.queue.repository.QueueItemRepository;
+import com.healingroom.domain.queue.repository.QueueVoteRepository;
+
+/**
+ * 방마다 함께 듣는 음악 대기열을 관리한다.
+ *
+ * <ul>
+ *   <li>누구나 곡을 등록할 수 있다. 기본 음악이 나오고 있으면 등록한 곡으로 바로 넘어간다.</li>
+ *   <li>내가 등록한 곡은 바로 넘기거나 뺄 수 있다.</li>
+ *   <li>다른 사람이 등록한 곡(기본 음악 포함)은 방 인원의 50%를 넘게(과반) 투표해야 넘기거나 뺄 수 있다.</li>
+ *   <li>곡이 끝나면 다음 곡, 대기열이 비면 방 기본 음악을 순서대로 튼다.</li>
+ * </ul>
+ *
+ * <p>같은 방의 변경은 방별 잠금으로 한 번에 하나씩 처리한다. 서버가 한 대일 때를 기준으로 한다.
+ */
+@Service
+public class QueueService {
+
+    private final QueueItemRepository items;
+    private final QueueVoteRepository votes;
+    private final DefaultTrackRepository defaults;
+    private final RoomSessionRegistry sessions;
+    private final TransactionTemplate tx;
+    private final ApplicationEventPublisher events;
+    private final Duration endGrace;
+    private final int maxQueueSize;
+
+    private final Map<String, ReentrantLock> locks = new ConcurrentHashMap<>();
+
+    public QueueService(QueueItemRepository items, QueueVoteRepository votes, DefaultTrackRepository defaults,
+                        RoomSessionRegistry sessions, TransactionTemplate tx, ApplicationEventPublisher events,
+                        @Value("${healing-room.queue.end-grace-seconds}") long endGraceSeconds,
+                        @Value("${healing-room.queue.max-size}") int maxQueueSize) {
+        this.items = items;
+        this.votes = votes;
+        this.defaults = defaults;
+        this.sessions = sessions;
+        this.tx = tx;
+        this.events = events;
+        this.endGrace = Duration.ofSeconds(endGraceSeconds);
+        this.maxQueueSize = maxQueueSize;
+    }
+
+    // ---------------------------------------------------------------- 조회
+
+    /** 방 전체 음악 상태 (재생 중 곡, 대기열, 투표한 사람) */
+    public PlayerState.Snapshot snapshot(String roomId) {
+        return tx.execute(status -> {
+            QueueItem playing = items.findFirstByRoomIdAndStatusOrderByIdAsc(roomId, QueueStatus.PLAYING).orElse(null);
+            List<QueueItem> queued = items.findByRoomIdAndStatusOrderByIdAsc(roomId, QueueStatus.QUEUED);
+
+            List<Long> ids = new java.util.ArrayList<>(queued.stream().map(QueueItem::getId).toList());
+            if (playing != null) {
+                ids.add(playing.getId());
+            }
+            Map<Long, Set<String>> voters = new HashMap<>();
+            for (QueueVote vote : votes.findByItemIdIn(ids)) {
+                voters.computeIfAbsent(vote.getItemId(), id -> new HashSet<>()).add(vote.getVisitorId());
+            }
+            return new PlayerState.Snapshot(playing, queued, voters);
+        });
+    }
+
+    public PlayerState stateFor(String roomId, String visitorId) {
+        return snapshot(roomId).forVisitor(visitorId, sessions.visitors(roomId), System.currentTimeMillis());
+    }
+
+    /** 지난 신청곡 (최근 30곡) */
+    public List<QueueHistoryResponse> history(String roomId, String visitorId) {
+        return tx.execute(status -> items.findTop30ByRoomIdAndAddedByIsNotNullAndStatusInOrderByIdDesc(roomId,
+                        List.of(QueueStatus.PLAYED, QueueStatus.SKIPPED, QueueStatus.REMOVED)).stream()
+                .map(item -> QueueHistoryResponse.of(item, visitorId))
+                .toList());
+    }
+
+    // ---------------------------------------------------------------- 방문자 동작
+
+    /** 곡 등록. 영상 확인(oEmbed)은 호출하는 쪽에서 끝낸 뒤 제목과 함께 넘긴다. */
+    public long add(String roomId, String visitorId, String youtubeId, String title) {
+        requirePresent(roomId, visitorId);
+        return inRoom(roomId, () -> {
+            if (items.countByRoomIdAndStatus(roomId, QueueStatus.QUEUED) >= maxQueueSize) {
+                throw new QueueException.QueueFull();
+            }
+            QueueItem item = items.save(new QueueItem(roomId, youtubeId, title, visitorId));
+            QueueItem playing = playing(roomId).orElse(null);
+            // 아무것도 안 나오거나 기본 음악이 나오는 중이면 바로 방문자 곡으로 넘어간다
+            if (playing == null || playing.isDefault()) {
+                advance(roomId, playing, QueueStatus.PLAYED);
+            }
+            return item.getId();
+        });
+    }
+
+    /**
+     * 넘기기/빼기 투표. 내가 등록한 곡이면 투표 없이 바로 처리한다.
+     *
+     * @return 이번 투표로 곡이 넘겨지거나 빠졌으면 true
+     */
+    public boolean vote(String roomId, Long itemId, String visitorId) {
+        requirePresent(roomId, visitorId);
+        return inRoom(roomId, () -> {
+            QueueItem item = activeItem(roomId, itemId);
+            if (item.isAddedBy(visitorId)) {
+                drop(roomId, item);
+                return true;
+            }
+            QueueVote.Key key = new QueueVote.Key(itemId, visitorId);
+            if (!votes.existsById(key)) {
+                votes.save(new QueueVote(itemId, visitorId));
+            }
+            return decide(roomId, item, sessions.visitors(roomId));
+        });
+    }
+
+    /** 투표 취소 */
+    public void unvote(String roomId, Long itemId, String visitorId) {
+        inRoom(roomId, () -> {
+            votes.deleteById(new QueueVote.Key(itemId, visitorId));
+            return null;
+        });
+    }
+
+    /** 브라우저 플레이어가 알려준 영상 길이(초). 재생 중인 곡에만 반영한다. */
+    public void reportDuration(String roomId, Long itemId, String visitorId, int seconds) {
+        requirePresent(roomId, visitorId);
+        if (seconds <= 0 || seconds > 6 * 60 * 60) {
+            return; // 라이브(0)거나 비정상적인 값
+        }
+        inRoom(roomId, () -> {
+            playing(roomId).filter(item -> item.getId().equals(itemId))
+                    .ifPresent(item -> item.reportDuration(seconds));
+            return null;
+        });
+    }
+
+    // ---------------------------------------------------------------- 상황 변화
+
+    /** 누가 들어오거나 나갔을 때. 인원이 바뀌면 투표 결과가 달라질 수 있고, 첫 입장이면 음악을 시작한다. */
+    public void onPresenceChanged(String roomId) {
+        inRoom(roomId, () -> {
+            Set<String> present = sessions.visitors(roomId);
+            Optional<QueueItem> playing = playing(roomId);
+            if (playing.isEmpty()) {
+                if (!present.isEmpty()) {
+                    advance(roomId, null, QueueStatus.PLAYED);
+                }
+                return null;
+            }
+            // 재생 중인 곡이 넘겨지면 대기열도 바뀌므로, 재생 중인 곡부터 차례로 다시 판정한다
+            if (!decide(roomId, playing.get(), present)) {
+                for (QueueItem queued : items.findByRoomIdAndStatusOrderByIdAsc(roomId, QueueStatus.QUEUED)) {
+                    decide(roomId, queued, present);
+                }
+            }
+            return null;
+        });
+    }
+
+    /** 2초마다: 길이를 아는 곡 중 끝난 곡이 있으면 다음 곡으로 넘긴다. */
+    @Scheduled(fixedDelay = 2000)
+    public void advanceFinished() {
+        OffsetDateTime now = OffsetDateTime.now();
+        for (QueueItem item : items.findByStatusAndDurationSecondsNotNull(QueueStatus.PLAYING)) {
+            if (!item.isFinished(now, endGrace)) {
+                continue;
+            }
+            inRoom(item.getRoomId(), () -> {
+                // 잠금을 기다리는 사이 바뀌었을 수 있으니 다시 확인
+                playing(item.getRoomId())
+                        .filter(current -> current.isFinished(OffsetDateTime.now(), endGrace))
+                        .ifPresent(current -> advance(item.getRoomId(), current, QueueStatus.PLAYED));
+                return null;
+            });
+        }
+    }
+
+    // ---------------------------------------------------------------- 내부
+
+    /** 지금 방에 있는 사람 기준으로 표가 충분하면 곡을 넘기거나 뺀다. */
+    private boolean decide(String roomId, QueueItem item, Set<String> present) {
+        long count = votes.findByItemId(item.getId()).stream()
+                .filter(vote -> present.contains(vote.getVisitorId()))
+                .count();
+        if (count > 0 && VotePolicy.passed(count, present.size())) {
+            drop(roomId, item);
+            return true;
+        }
+        return false;
+    }
+
+    /** 재생 중이면 다음 곡으로 넘기고, 대기 중이면 대기열에서 뺀다. */
+    private void drop(String roomId, QueueItem item) {
+        if (item.getStatus() == QueueStatus.PLAYING) {
+            advance(roomId, item, QueueStatus.SKIPPED);
+        } else {
+            item.end(QueueStatus.REMOVED, OffsetDateTime.now());
+        }
+    }
+
+    /** 현재 곡을 끝내고 다음 곡을 시작한다. 대기열이 비었으면 기본 음악, 방에 아무도 없으면 멈춘다. */
+    private void advance(String roomId, QueueItem current, QueueStatus endStatus) {
+        OffsetDateTime now = OffsetDateTime.now();
+        if (current != null) {
+            current.end(endStatus, now);
+            items.flush();
+        }
+        QueueItem next = items.findFirstByRoomIdAndStatusOrderByIdAsc(roomId, QueueStatus.QUEUED).orElse(null);
+        if (next == null) {
+            if (sessions.listenerCount(roomId) == 0) {
+                return;
+            }
+            next = nextDefault(roomId).orElse(null);
+            if (next == null) {
+                return;
+            }
+            next = items.save(next);
+        }
+        next.start(now);
+    }
+
+    /** 방 기본 음악을 순서대로 돌아가며 고른다. */
+    private Optional<QueueItem> nextDefault(String roomId) {
+        List<DefaultTrack> list = defaults.findByRoomIdOrderBySortOrderAsc(roomId);
+        if (list.isEmpty()) {
+            return Optional.empty();
+        }
+        int index = items.findFirstByRoomIdAndAddedByIsNullOrderByIdDesc(roomId)
+                .map(last -> {
+                    for (int i = 0; i < list.size(); i++) {
+                        if (list.get(i).getYoutubeId().equals(last.getYoutubeId())) {
+                            return (i + 1) % list.size();
+                        }
+                    }
+                    return 0;
+                })
+                .orElse(0);
+        DefaultTrack track = list.get(index);
+        return Optional.of(QueueItem.defaultTrack(roomId, track.getYoutubeId(), track.getTitle()));
+    }
+
+    private Optional<QueueItem> playing(String roomId) {
+        return items.findFirstByRoomIdAndStatusOrderByIdAsc(roomId, QueueStatus.PLAYING);
+    }
+
+    private QueueItem activeItem(String roomId, Long itemId) {
+        return items.findById(itemId)
+                .filter(item -> item.getRoomId().equals(roomId))
+                .filter(item -> item.getStatus() == QueueStatus.QUEUED || item.getStatus() == QueueStatus.PLAYING)
+                .orElseThrow(QueueException.ItemNotFound::new);
+    }
+
+    private void requirePresent(String roomId, String visitorId) {
+        if (visitorId == null || !sessions.isPresent(roomId, visitorId)) {
+            throw new QueueException.NotInRoom();
+        }
+    }
+
+    /** 방별 잠금 안에서 트랜잭션을 실행하고, 끝나면 방 전체에 새 상태를 알린다. */
+    private <T> T inRoom(String roomId, Supplier<T> work) {
+        ReentrantLock lock = locks.computeIfAbsent(roomId, id -> new ReentrantLock());
+        lock.lock();
+        try {
+            T result = tx.execute(status -> work.get());
+            events.publishEvent(new QueueChangedEvent(roomId));
+            return result;
+        } finally {
+            lock.unlock();
+        }
+    }
+}

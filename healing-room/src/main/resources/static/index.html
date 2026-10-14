@@ -8,15 +8,74 @@
 </head>
 <body>
   <canvas id="scene"></canvas>
-  <div class="ui title">
-    <h1 id="title">불러오는 중…</h1>
-    <p id="subtitle"></p>
-    <p class="presence" id="presence" hidden><span class="dot"></span><span id="presence-text"></span></p>
-  </div>
-  <div class="ui hint" id="hint"></div>
-  <div class="ui tabs" id="tabs">
-    <button id="fx">효과 끄기</button>
-  </div>
+
+  <!-- 로비: 방 목록 -->
+  <section id="lobby" class="lobby" hidden>
+    <header class="lobby-head">
+      <h1>힐링룸</h1>
+      <p>마음에 드는 방에 들어가 멍하니 쉬어 가세요</p>
+    </header>
+    <div id="room-grid" class="room-grid"></div>
+  </section>
+
+  <!-- 방 -->
+  <section id="room" hidden>
+    <div class="ui top-left">
+      <button id="back" class="chip">← 로비</button>
+      <h1 id="title"></h1>
+      <p id="subtitle"></p>
+      <p class="presence"><span class="dot"></span><span id="presence-text">연결 중…</span></p>
+    </div>
+
+    <div class="ui top-right">
+      <p id="hint" class="hint"></p>
+      <div class="panel mixer">
+        <div class="panel-head">환경음</div>
+        <div id="mixer-list"></div>
+      </div>
+    </div>
+
+    <div class="ui panel music" id="music">
+      <div class="music-head">
+        <span class="music-head-title">함께 듣는 음악</span>
+        <span id="mini-title" class="mini-title"></span>
+        <span class="win-buttons">
+          <button id="music-min" class="win" type="button" title="최소화">▁</button>
+          <button id="music-max" class="win" type="button" title="최대화">□</button>
+        </span>
+      </div>
+
+      <div id="music-body" class="music-body">
+        <div class="player"><div id="yt-player"></div></div>
+        <div class="now">
+          <div class="now-meta">
+            <span id="now-tag" class="tag"></span>
+            <p id="now-title">음악을 불러오는 중…</p>
+          </div>
+          <button id="now-vote" class="btn" hidden></button>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button class="tab on" data-tab="queue" role="tab">다음 곡 <b id="queue-count">0</b></button>
+          <button class="tab" data-tab="history" role="tab">지난 신청곡</button>
+        </div>
+        <ol id="queue-list" class="list"></ol>
+        <ol id="history-list" class="list" hidden></ol>
+
+        <form id="add-form" class="add">
+          <input id="add-url" placeholder="YouTube 링크를 붙여넣어 신청하기" autocomplete="off" required>
+          <button class="btn primary">신청</button>
+        </form>
+        <p id="music-msg" class="msg" role="status"></p>
+      </div>
+    </div>
+
+    <div class="ui controls">
+      <button id="sound" class="chip">소리 켜기</button>
+      <button id="fx" class="chip">효과 끄기</button>
+    </div>
+  </section>
+
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-package com.healingroom.room;
+package com.healingroom.domain.room.entity;
 
 import java.time.OffsetDateTime;
 
@@ -32,6 +32,9 @@ public class Room {
     @Column(nullable = false)
     private String background;
 
+    @Column(name = "background_video")
+    private String backgroundVideo;
+
     @Column(nullable = false)
     private String effect;
 
@@ -53,6 +56,7 @@ public class Room {
     public String getSubtitle() { return subtitle; }
     public String getHint() { return hint; }
     public String getBackground() { return background; }
+    public String getBackgroundVideo() { return backgroundVideo; }
     public String getEffect() { return effect; }
     public int getSortOrder() { return sortOrder; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
