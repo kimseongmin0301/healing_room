@@ -302,7 +302,10 @@ Redis는 **다른 서비스(other-service)와 같은 서버를 공유**합니다
   └─ deploy/                                  저장소 deploy/ 복사본
   ```
 - 실행: systemd `healing-room` (Java: `~/apps/jre17`), 로그는 `journalctl -u healing-room -f` (seongmin 은 adm 그룹이라 sudo 없이 볼 수 있음)
-- **새 버전 배포**: 커밋한 뒤 저장소 루트에서 `bash deploy/deploy.sh` (테스트·빌드 → 업로드 → 재시작 → 확인). 되돌리기는 `bash deploy/deploy.sh rollback`.
+- **새 버전 배포 = `main` 에 푸시** (GitHub Actions `.github/workflows/deploy.yml`, `healing-room/**` 가 바뀐 푸시만). 테스트(`-Pci`, DB 가 필요한 `@Tag("integration")` 제외) → 빌드 → 배포 전용 키로 jar 를 보내면 서버의 `deploy/ci-receive.sh` 가 새 release 저장 → current 교체 → 재시작 → 상태 확인, **실패하면 이전 버전으로 자동 복구**합니다. Actions 탭에서 수동 실행(workflow_dispatch)도 됩니다.
+  - 배포 전용 키는 서버 `authorized_keys` 에 `restrict,command="…/ci-receive.sh"` 로 묶여 있어 **배포 말고는 아무것도 못 합니다**(쉘·다른 명령 불가). 키와 서버 정보는 저장소 Secrets(`DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_HOST`, `DEPLOY_PORT`, `DEPLOY_USER`).
+  - `deploy/ci-receive.sh` 를 고치면 서버에 **직접 복사**해야 합니다(배포 키로는 바꿀 수 없음): `scp deploy/ci-receive.sh ai-server:healing-room/deploy/`
+  - 손으로 배포·되돌리기: 저장소 루트에서 `bash deploy/deploy.sh`, `bash deploy/deploy.sh rollback`.
 - **sudo 가 필요한 설치**(서비스 등록, nginx, 인증서)는 `deploy/install-root.sh` 를 사람이 직접 실행합니다. AI 는 sudo 비밀번호를 다루지 않습니다. 재시작만 `/etc/sudoers.d/healing-room` 으로 비밀번호 없이 허용합니다.
 - nginx 는 **`sites-available/healing.kimseongmin.co.kr` 파일만** 이 앱 것입니다. 기존 `kimseongmin.co.kr` 설정 파일은 다른 서비스(메인, RAG, other-app)가 쓰므로 절대 수정하지 마세요. 적용 전에는 항상 `nginx -t`.
 - 운영 서버에 붙은 앱과 **같은 DB 를 쓰는 서버를 로컬에서 동시에 띄우지 마세요**(대기열 스케줄러가 두 번 돕니다). 로컬 개발용 DB 를 따로 두는 게 좋습니다.

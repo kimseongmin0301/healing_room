@@ -204,7 +204,7 @@ cd healing_room/healing-room
 cd healing_room/healing-room
 ./gradlew test
 ```
-대부분의 테스트는 DB와 Redis 없이 돌아가요. `HealingRoomApplicationTests`만 실제 DB와 Redis에 접속해서 **코드와 테이블이 맞는지 확인**해요(읽기만 함). 그래서 `.env`가 있어야 해요.
+대부분의 테스트는 DB와 Redis 없이 돌아가요. `HealingRoomApplicationTests`만 실제 DB와 Redis에 접속해서 **코드와 테이블이 맞는지 확인**해요(읽기만 함). 그래서 `.env`가 있어야 하고, CI에서는 `./gradlew test -Pci`로 이 테스트만 빼고 돌려요.
 
 ---
 
@@ -214,10 +214,18 @@ cd healing_room/healing-room
 | 파일 | 역할 |
 |---|---|
 | `install-root.sh` | **처음 한 번 (sudo)**: 서비스 등록, nginx 사이트 추가, HTTPS 인증서 발급. 여러 번 실행해도 안전하고, nginx 검사에 실패하면 되돌려요 |
-| `deploy.sh` | **새 버전 배포**: 테스트 → 빌드 → 업로드 → 재시작 → 확인. `rollback`으로 이전 버전으로 되돌리기 |
+| `deploy.sh` | **손으로 배포**: 테스트 → 빌드 → 업로드 → 재시작 → 확인. `rollback`으로 이전 버전으로 되돌리기 |
+| `ci-receive.sh` | **자동 배포 받기** (서버): GitHub Actions 가 보낸 jar 를 저장하고 재시작, 실패하면 이전 버전으로 복구 |
 | `healing-room.service` | systemd 서비스 정의 |
 | `nginx-http.conf` / `nginx-https.conf` | 인증서 발급 전 / 후 nginx 설정 (WebSocket 포함) |
 
+**자동 배포**: `main`에 푸시하면 GitHub Actions(`.github/workflows/deploy.yml`)가 테스트 → 빌드 → 서버 배포까지 해요. `healing-room/` 안의 파일이 바뀐 푸시만 배포하고, 문서만 바꾼 푸시는 배포하지 않아요. 진행 상황은 GitHub의 **Actions** 탭에서 볼 수 있어요.
+
+- 배포 전용 SSH 키는 서버에서 `ci-receive.sh`만 실행할 수 있게 묶여 있어서, 키가 새어 나가도 서버에 접속할 수 없어요.
+- 새 버전이 제대로 뜨지 않으면 **이전 버전으로 자동으로 되돌려요.**
+- 필요한 Secrets: `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_HOST`, `DEPLOY_PORT`, `DEPLOY_USER`
+
+손으로 배포하려면:
 ```bash
 bash deploy/deploy.sh
 ```

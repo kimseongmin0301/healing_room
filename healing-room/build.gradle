@@ -34,5 +34,10 @@ tasks.named('bootRun') {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		// CI 에서는 실제 DB·Redis 가 없으므로 통합 테스트(@Tag("integration"))를 뺀다: ./gradlew test -Pci
+		if (project.hasProperty('ci')) {
+			excludeTags 'integration'
+		}
+	}
 }
