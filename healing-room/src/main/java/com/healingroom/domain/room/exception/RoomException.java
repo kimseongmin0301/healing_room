@@ -29,6 +29,12 @@ public abstract class RoomException extends ApiException {
         }
     }
 
+    public static class ResetNotAllowed extends RoomException {
+        public ResetNotAllowed() {
+            super(HttpStatus.FORBIDDEN, "기록 초기화는 기본 방에서 방장만 할 수 있어요.");
+        }
+    }
+
     public static class InvalidVisitor extends RoomException {
         public InvalidVisitor() {
             super(HttpStatus.BAD_REQUEST, "방문자 정보를 확인할 수 없어요. 새로고침해 주세요.");

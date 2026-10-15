@@ -13,6 +13,18 @@ function cell(text, className = '') {
   return Object.assign(document.createElement('td'), { textContent: text, className });
 }
 
+async function reset(roomId) {
+  const what = roomId ? `'${roomId}' 방의` : '모든 방의';
+  if (!confirm(`${what} 지난 신청곡, 투표, 채팅을 모두 지울까요? 되돌릴 수 없어요.`)) return;
+  const url = '/api/admin/reset' + (roomId ? `?roomId=${encodeURIComponent(roomId)}` : '');
+  const res = await fetch(url, { method: 'POST', headers: { 'X-Admin-Token': getToken() } });
+  const data = await res.json().catch(() => null);
+  $('status').textContent = res.ok
+    ? `초기화했어요: 곡 기록 ${data.deletedSongs}개${data.deletedChatRooms !== undefined ? `, 채팅 ${data.deletedChatRooms}개 방` : ''}`
+    : (data?.message ?? `초기화하지 못했어요 (${res.status})`);
+  load();
+}
+
 function render({ totalPeople, rooms }) {
   $('status').textContent = `총 ${totalPeople}명 · ${new Date().toLocaleTimeString('ko-KR')} 기준`;
   $('rooms').replaceChildren(...rooms.map(room => {
@@ -20,6 +32,10 @@ function render({ totalPeople, rooms }) {
     const h2 = document.createElement('h2');
     h2.textContent = room.name;
     h2.append(Object.assign(document.createElement('small'), { textContent: `#${room.id} · ${room.count}명` }));
+    const resetButton = Object.assign(document.createElement('button'), { className: 'btn', type: 'button', textContent: '이 방 초기화' });
+    resetButton.style.marginLeft = '10px';
+    resetButton.onclick = () => reset(room.id);
+    h2.append(resetButton);
     const table = document.createElement('table');
     table.innerHTML = '<thead><tr><th>닉네임</th><th>IP</th><th>방문자</th><th>들어온 시각</th><th>탭</th></tr></thead>';
     const body = document.createElement('tbody');
@@ -68,6 +84,11 @@ $('logout').addEventListener('click', () => {
   clearInterval(timer);
   $('rooms').replaceChildren();
   $('status').textContent = '키를 지웠어요.';
+});
+
+$('reset-all').addEventListener('click', () => {
+  if (!getToken()) { $('status').textContent = '먼저 관리자 키를 넣어 주세요.'; return; }
+  reset(null);
 });
 
 if (getToken()) start();

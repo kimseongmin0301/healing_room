@@ -237,6 +237,29 @@ public class QueueService {
 
     // ---------------------------------------------------------------- 상황 변화
 
+    // ---------------------------------------------------------------- 기록 초기화
+
+    /**
+     * 방의 대기열·지난 신청곡·투표를 모두 지운다 (이 방에서 나온 인기곡·함께 신청된 곡 통계도 함께 사라짐).
+     * 사람이 있으면 테마 기본 음악부터 다시 튼다.
+     */
+    public int resetRoom(String roomId) {
+        return inRoom(roomId, () -> {
+            int deleted = items.deleteAllInRoom(roomId);
+            if (sessions.listenerCount(roomId) > 0) {
+                advance(roomId, null, QueueStatus.PLAYED);
+            }
+            return deleted;
+        });
+    }
+
+    /** 모든 방의 기록을 지운다. 사람이 있는 방은 기본 음악부터 다시 튼다 */
+    public int resetAll() {
+        Integer deleted = tx.execute(status -> items.deleteEverything());
+        sessions.activeRooms().forEach(this::onPresenceChanged); // 재생 중 곡이 없으니 기본 음악을 시작하고 상태를 알린다
+        return deleted == null ? 0 : deleted;
+    }
+
     /** 누가 들어오거나 나갔을 때. 인원(과 방장)이 바뀌면 투표 결과가 달라질 수 있고, 첫 입장이면 음악을 시작한다. */
     public void onPresenceChanged(String roomId) {
         inRoom(roomId, () -> {

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.healingroom.domain.room.dto.CreateRoomRequest;
 import com.healingroom.domain.room.dto.RoomDetailResponse;
 import com.healingroom.domain.room.dto.RoomResponse;
+import com.healingroom.domain.room.service.RoomResetService;
 import com.healingroom.domain.room.service.RoomService;
 
 @RestController
@@ -22,9 +23,18 @@ import com.healingroom.domain.room.service.RoomService;
 public class RoomController {
 
     private final RoomService roomService;
+    private final RoomResetService resetService;
 
-    public RoomController(RoomService roomService) {
+    public RoomController(RoomService roomService, RoomResetService resetService) {
         this.roomService = roomService;
+        this.resetService = resetService;
+    }
+
+    /** 기본 방의 기록 초기화 (그 방의 방장만): 지난 신청곡·투표·통계·채팅을 지우고 기본 음악부터 다시 튼다 */
+    @PostMapping("/{id}/reset")
+    public ResponseEntity<Void> reset(@PathVariable String id, @RequestHeader("X-Visitor-Id") String visitorId) {
+        resetService.resetByHost(id, visitorId);
+        return ResponseEntity.noContent().build();
     }
 
     /** 열려 있는 방 목록 + 방마다 지금 있는 사람 수 (로비에서 사용) */

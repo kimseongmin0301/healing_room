@@ -230,6 +230,8 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | GET | `/api/rooms/{roomId}/recommendations` | 지금 곡 기준 추천 `{ basedOn, similar, similarAvailable, together, popular }` |
 | GET | `/api/rooms/{roomId}/chat` | 지난 대화 (오래된 것부터, 최대 100개) `[{ id, nickname, text, sentAt, mine }]` |
 | POST | `/api/rooms/{roomId}/chat` | 채팅 보내기 `{ "nickname", "text" }` → 201. 10초에 6개 넘으면 429, Redis 장애 시 503 |
+| POST | `/api/rooms/{id}/reset` | **기본 방의 방장** 기록 초기화 (지난 신청곡·투표·통계·채팅) → 204, 아니면 403 |
+| POST | `/api/admin/reset?roomId=` | **관리자** 기록 초기화. roomId 가 없으면 모든 방 + YouTube 검색 캐시 |
 | GET | `/api/admin/presence` | **관리자** (`X-Admin-Token`) 모든 방 접속자: 닉네임, 전체 IP, 방문자 id 앞 8자리, 들어온 시각 |
 | WS | `/ws/rooms/{roomId}?visitorId={uuid}&nickname={닉네임}` | 연결돼 있는 동안 "방에 있음". 서버 → `state`(음악), `chat`(새 채팅), `presence`(접속자 목록). 브라우저 → `{"type":"nickname","nickname":"…"}`(닉네임 변경). 닫힌 방이면 연결 거부 |
 
@@ -243,6 +245,11 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 자동으로 넣은 곡(`added_by IS NULL`: default·autoplay)은 투표 없이 누구나 바로 넘기고, 신청곡이 들어오면 바로 신청곡으로 바뀝니다.
 - 방장 조작: 재생 위치 = (`paused_at` 또는 지금) − `started_at`. 멈춤은 `paused_at` 기록, 이어서 재생은 멈춰 있던 시간만큼 `started_at`을 뒤로 미룸, 위치 이동은 `started_at`을 다시 계산합니다. 멈춘 곡은 끝나지 않습니다.
 - 대기열 순서는 `queue_order`(작을수록 먼저). 새 곡은 방의 최댓값 + 1, 방장이 옮기면 이웃과 값을 맞바꿉니다.
+
+### 기록 초기화 (RoomResetService)
+- 이상한 영상이 올라왔을 때 등 방의 흔적을 지웁니다: `room_queue_item`(지난 신청곡·재생 기록, 투표는 FK CASCADE) 삭제 → 인기곡·함께 신청된 곡·자동 추천 후보에서도 사라짐, Redis 채팅 키 삭제 후 `chat-clear` 알림으로 화면도 비움. 전체 초기화는 YouTube 검색 캐시도 비웁니다. 지운 뒤 사람이 있는 방은 기본 음악부터 다시 틉니다.
+- 방문자는 **기본 방의 방장만** 할 수 있습니다(화면의 "🧹 기록 초기화"). 사용자 방은 30분 비면 닫히므로 대상이 아닙니다. 관리자는 `/admin.html` 에서 방별·전체 초기화.
+- 브라우저 `localStorage.myRequests`(내 신청 기록)는 각자 브라우저에 있어 서버에서 지울 수 없습니다.
 
 ### 곡 추천 (RecommendService)
 - **내가 자주 신청한 곡**: 서버가 아니라 브라우저 `localStorage.myRequests`(최대 100곡, 신청 횟수·마지막 시각)에 저장합니다.

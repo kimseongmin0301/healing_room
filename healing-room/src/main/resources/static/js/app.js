@@ -7,7 +7,7 @@ import { connectRoom } from './room-socket.js';
 import { showLobby, hideLobby } from './lobby.js';
 import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAudible } from './music.js';
 import { enterMixer, leaveMixer, setAmbientEnabled } from './audio/mixer.js';
-import { initChat, enterChat, leaveChat, receiveChat, getNickname } from './chat.js';
+import { initChat, enterChat, leaveChat, receiveChat, clearChat, getNickname } from './chat.js';
 import { renderPeople, resetPeople } from './people.js';
 
 const $ = id => document.getElementById(id);
@@ -74,12 +74,13 @@ async function enterRoom(id) {
   document.body.classList.add('in-room');
 
   scene.setImage(media);
-  current = { id: room.id, effect: effectModule.create(scene), media };
+  current = { id: room.id, isDefault: room.isDefault, effect: effectModule.create(scene), media };
   $('title').textContent = room.name;
   $('subtitle').textContent = room.name === theme.title ? theme.subtitle : `${theme.title} · ${theme.subtitle}`;
   $('hint').textContent = theme.hint;
   $('presence-text').textContent = '연결 중…';
   $('host-chip').hidden = true;
+  $('reset-room').hidden = true;
   document.title = `${room.name} · 힐링룸`;
 
   enterMixer(room.id, ambients);
@@ -88,11 +89,13 @@ async function enterRoom(id) {
   socket = connectRoom(room.id, {
     nickname: getNickname,
     onChat: receiveChat,
+    onChatClear: clearChat,
     onPresence: renderPeople,
     onState: state => {
       applyState(state);
       setPresence(state.listeners);
       $('host-chip').hidden = !state.hostIsMe;
+      $('reset-room').hidden = !(current?.isDefault && state.hostIsMe); // 기본 방의 방장만
     },
     // 소켓이 연결된 뒤(=방에 들어온 뒤)에 지난 대화를 불러온다
     onStatus: status => {
@@ -176,6 +179,14 @@ onMusicAudible(audible => {
 // ---------------------------------------------------------------- 시작
 
 $('back').onclick = () => { location.hash = ''; };
+$('reset-room').onclick = async () => {
+  if (!current || !confirm('이 방의 지난 신청곡, 투표, 채팅을 모두 지울까요?\n지금 나오는 곡도 멈추고 기본 음악부터 다시 시작해요.')) return;
+  try {
+    await api('POST', `/api/rooms/${encodeURIComponent(current.id)}/reset`);
+  } catch (e) {
+    alert(e.message);
+  }
+};
 addEventListener('nickname-change', e => socket?.sendNickname(e.detail));
 $('music-sound').onclick = () => { setMusic(!musicOn); store.set('musicOn', musicOn); };
 $('ambient-sound').onclick = () => {

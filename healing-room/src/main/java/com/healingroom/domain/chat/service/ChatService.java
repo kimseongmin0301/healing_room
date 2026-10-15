@@ -2,6 +2,7 @@ package com.healingroom.domain.chat.service;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -11,6 +12,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import com.healingroom.domain.chat.dto.ChatClearPush;
 import com.healingroom.domain.chat.dto.ChatMessageResponse;
 import com.healingroom.domain.chat.dto.ChatPush;
 import com.healingroom.domain.chat.entity.ChatRecord;
@@ -107,8 +109,38 @@ public class ChatService {
 
     /** Redis pub/sub 으로 받은 새 메시지를 이 서버에 접속한 방 사람들에게 보낸다 */
     public void onPublished(String payload) {
+        var clear = repository.clearTarget(payload);
+        if (clear.isPresent()) {
+            String target = clear.get();
+            var rooms = "*".equals(target) ? sessions.activeRooms() : Set.of(target);
+            rooms.forEach(roomId -> broadcaster.send(roomId, visitorId -> ChatClearPush.INSTANCE));
+            return;
+        }
         ChatRecord record = repository.parse(payload);
         broadcaster.send(record.roomId(), visitorId -> ChatPush.of(ChatMessageResponse.of(record, visitorId)));
+    }
+
+    /** 방의 대화를 모두 지우고, 방에 있는 사람들 화면에서도 지우게 한다 */
+    public void clearRoom(String roomId) {
+        try {
+            repository.deleteRoom(roomId);
+            repository.publishClear(roomId);
+        } catch (DataAccessException e) {
+            log.warn("채팅 초기화 실패 (room={}): {}", roomId, e.getMostSpecificCause().getMessage());
+            throw new ChatException.Unavailable();
+        }
+    }
+
+    /** 모든 방의 대화를 지운다 */
+    public int clearAll() {
+        try {
+            int deleted = repository.deleteAllRooms();
+            repository.publishClear("*");
+            return deleted;
+        } catch (DataAccessException e) {
+            log.warn("채팅 전체 초기화 실패: {}", e.getMostSpecificCause().getMessage());
+            throw new ChatException.Unavailable();
+        }
     }
 
     /** 방이 닫히면 그 방의 대화를 지운다 (DB 커밋이 끝난 뒤) */

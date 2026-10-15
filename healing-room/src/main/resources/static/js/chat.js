@@ -152,6 +152,15 @@ export function leaveChat() {
   roomId = null;
 }
 
+/** 기록 초기화로 대화가 지워졌을 때 화면도 비운다 */
+export function clearChat() {
+  seen = new Set();
+  list.replaceChildren();
+  setUnread(0);
+  renderEmpty();
+  message('대화 기록이 초기화됐어요');
+}
+
 /** WebSocket 으로 받은 새 메시지 */
 export function receiveChat(chatMessage) {
   if (!roomId) return;

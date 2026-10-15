@@ -50,6 +50,11 @@ public class YouTubeSearchClient {
         this.cacheTtl = Duration.ofHours(cacheHours);
     }
 
+    /** 저장해 둔 검색 결과를 모두 버린다 (초기화할 때) */
+    public void clearCache() {
+        cache.clear();
+    }
+
     public boolean isAvailable() {
         return !apiKey.isEmpty();
     }

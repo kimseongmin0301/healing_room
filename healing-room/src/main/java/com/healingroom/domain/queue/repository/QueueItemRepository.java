@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -13,6 +14,16 @@ import com.healingroom.domain.queue.entity.QueueSource;
 import com.healingroom.domain.queue.entity.QueueStatus;
 
 public interface QueueItemRepository extends JpaRepository<QueueItem, Long> {
+
+    /** 방의 대기열·재생 기록을 모두 지운다 (투표는 DB 의 ON DELETE CASCADE 로 같이 지워짐) */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from QueueItem q where q.roomId = :roomId")
+    int deleteAllInRoom(@Param("roomId") String roomId);
+
+    /** 모든 방의 대기열·재생 기록을 지운다 */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from QueueItem q")
+    int deleteEverything();
 
     /** 재생 중인 곡 (방마다 최대 1곡) */
     Optional<QueueItem> findFirstByRoomIdAndStatusOrderByIdAsc(String roomId, QueueStatus status);

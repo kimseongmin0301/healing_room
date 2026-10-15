@@ -2,8 +2,12 @@ package com.healingroom.domain.chat.repository;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -54,6 +58,31 @@ public class ChatRepository {
 
     public void deleteRoom(String roomId) {
         redis.delete(key(roomId));
+    }
+
+    /** 모든 방의 채팅을 지운다. KEYS 대신 SCAN 으로 이 앱의 채팅 키만 찾는다 (도배 방지 카운터는 남김) */
+    public int deleteAllRooms() {
+        int deleted = 0;
+        try (Cursor<String> keys = redis.scan(ScanOptions.scanOptions().match(prefix + "chat:*").count(200).build())) {
+            while (keys.hasNext()) {
+                redis.delete(keys.next());
+                deleted++;
+            }
+        }
+        return deleted;
+    }
+
+    /** 채팅이 지워졌음을 모든 서버에 알린다. roomId 가 "*" 이면 모든 방 */
+    public void publishClear(String roomId) {
+        redis.convertAndSend(channel(), json.writeValueAsString(Map.of("type", "clear", "roomId", roomId)));
+    }
+
+    /** pub/sub 메시지가 "채팅 지움" 알림이면 대상 방 id, 새 메시지면 비어 있음 */
+    public Optional<String> clearTarget(String payload) {
+        var node = json.readTree(payload);
+        return "clear".equals(node.path("type").asString(""))
+                ? Optional.of(node.path("roomId").asString(""))
+                : Optional.empty();
     }
 
     /** window 동안 limit 번까지 허용. 넘으면 false */

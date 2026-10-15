@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.healingroom.domain.admin.dto.AdminPresenceResponse;
 import com.healingroom.domain.admin.exception.AdminException;
 import com.healingroom.domain.admin.service.AdminService;
+import com.healingroom.domain.room.service.RoomResetService;
 
 @WebMvcTest(AdminController.class)
 class AdminControllerTests {
@@ -26,6 +27,28 @@ class AdminControllerTests {
 
     @MockitoBean
     AdminService adminService;
+
+    @MockitoBean
+    RoomResetService resetService;
+
+    @Test
+    void resetAllNeedsToken() throws Exception {
+        willThrow(new AdminException.Unauthorized()).given(adminService).authorize(null);
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/admin/reset"))
+                .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verifyNoInteractions(resetService);
+    }
+
+    @Test
+    void resetOneRoomWithToken() throws Exception {
+        given(resetService.reset("sea")).willReturn(java.util.Map.of("room", "sea", "deletedSongs", 3));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/admin/reset")
+                        .param("roomId", "sea").header("X-Admin-Token", "secret"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deletedSongs").value(3));
+    }
 
     @Test
     void wrongTokenIs401() throws Exception {

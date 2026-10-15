@@ -99,6 +99,7 @@ body:not(.in-room) canvas { display: none; }
 .presence .tag { margin-left: 6px; }
 .people-chip { margin-top: 10px; display: inline-flex; align-items: center; gap: 6px; text-shadow: none; }
 .people-chip b { color: var(--accent); }
+.reset-chip { margin: 10px 0 0 6px; text-shadow: none; }
 .people-chip[aria-expanded="true"] .caret { display: inline-block; transform: rotate(180deg); }
 .people { margin-top: 10px; width: 280px; padding: 10px 12px; box-sizing: border-box; text-shadow: none; }
 .people-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 240px; overflow-y: auto; overscroll-behavior: contain; }

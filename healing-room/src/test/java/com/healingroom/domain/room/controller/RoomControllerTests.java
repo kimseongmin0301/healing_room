@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.healingroom.domain.room.dto.RoomDetailResponse;
 import com.healingroom.domain.room.dto.RoomResponse;
 import com.healingroom.domain.room.exception.RoomException;
+import com.healingroom.domain.room.service.RoomResetService;
 import com.healingroom.domain.room.service.RoomService;
 import com.healingroom.domain.theme.dto.AmbientResponse;
 import com.healingroom.domain.theme.dto.ThemeResponse;
@@ -37,6 +38,25 @@ class RoomControllerTests {
 
     @MockitoBean
     RoomService roomService;
+
+    @MockitoBean
+    RoomResetService resetService;
+
+    @Test
+    void resetByNonHostIs403() throws Exception {
+        org.mockito.BDDMockito.willThrow(new RoomException.ResetNotAllowed()).given(resetService).resetByHost("sea", VISITOR);
+
+        mvc.perform(post("/api/rooms/sea/reset").header("X-Visitor-Id", VISITOR))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("기록 초기화는 기본 방에서 방장만 할 수 있어요."));
+    }
+
+    @Test
+    void resetByHostIs204() throws Exception {
+        mvc.perform(post("/api/rooms/sea/reset").header("X-Visitor-Id", VISITOR))
+                .andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(resetService).resetByHost("sea", VISITOR);
+    }
 
     @Test
     void listOpenRoomsWithThemeAndListeners() throws Exception {

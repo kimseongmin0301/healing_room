@@ -2,7 +2,7 @@
 // 서버가 음악 상태(state), 채팅(chat), 접속자 목록(presence)을 보내준다. 닉네임을 바꾸면 서버에 알린다.
 import { visitorId } from './api.js';
 
-export function connectRoom(roomId, { nickname, onState, onChat, onPresence, onStatus }) {
+export function connectRoom(roomId, { nickname, onState, onChat, onChatClear, onPresence, onStatus }) {
   let ws = null;
   let closed = false;
   let retry = 0;
@@ -23,6 +23,7 @@ export function connectRoom(roomId, { nickname, onState, onChat, onPresence, onS
       if (message.type === 'state') onState(message);
       else if (message.type === 'chat') onChat?.(message.message);
       else if (message.type === 'presence') onPresence?.(message);
+      else if (message.type === 'chat-clear') onChatClear?.();
     };
     ws.onclose = () => {
       clearInterval(pingTimer);
