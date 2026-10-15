@@ -112,6 +112,28 @@
       </div>
     </div>
 
+    <!-- 채팅 -->
+    <div class="ui panel chat" id="chat">
+      <div class="chat-head">
+        <span class="chat-title">채팅</span>
+        <b id="chat-unread" class="badge" hidden></b>
+        <button id="chat-nick" class="link chat-nick" type="button" title="닉네임 바꾸기"></button>
+        <form id="chat-nick-form" class="chat-nick-form" hidden>
+          <input id="chat-nick-input" maxlength="12" autocomplete="off" aria-label="새 닉네임">
+          <button class="btn" type="submit">저장</button>
+        </form>
+        <button id="chat-toggle" class="win" type="button" title="접기">▁</button>
+      </div>
+      <div id="chat-body" class="chat-body">
+        <ol id="chat-list" class="chat-list" aria-live="polite"></ol>
+        <form id="chat-form" class="add">
+          <input id="chat-input" maxlength="300" placeholder="메시지 보내기" autocomplete="off">
+          <button class="btn primary">보내기</button>
+        </form>
+        <p id="chat-msg" class="msg" role="status"></p>
+      </div>
+    </div>
+
     <div class="ui controls">
       <button id="music-sound" class="chip">음악 켜기</button>
       <button id="ambient-sound" class="chip">환경음 켜기</button>

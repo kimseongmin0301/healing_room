@@ -11,6 +11,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ import com.healingroom.domain.presence.service.RoomSessionRegistry;
 import com.healingroom.domain.room.dto.RoomDetailResponse;
 import com.healingroom.domain.room.dto.RoomResponse;
 import com.healingroom.domain.room.entity.Room;
+import com.healingroom.domain.room.event.RoomClosedEvent;
 import com.healingroom.domain.room.exception.RoomException;
 import com.healingroom.domain.room.repository.RoomRepository;
 import com.healingroom.domain.theme.dto.ThemeResponse;
@@ -39,15 +41,18 @@ public class RoomService {
     private final RoomRepository rooms;
     private final ThemeService themeService;
     private final RoomSessionRegistry sessions;
+    private final ApplicationEventPublisher events;
     private final Duration idleClose;
     private final int maxOpenPerVisitor;
 
     public RoomService(RoomRepository rooms, ThemeService themeService, RoomSessionRegistry sessions,
+                       ApplicationEventPublisher events,
                        @Value("${healing-room.room.idle-close-minutes}") long idleCloseMinutes,
                        @Value("${healing-room.room.max-open-per-visitor}") int maxOpenPerVisitor) {
         this.rooms = rooms;
         this.themeService = themeService;
         this.sessions = sessions;
+        this.events = events;
         this.idleClose = Duration.ofMinutes(idleCloseMinutes);
         this.maxOpenPerVisitor = maxOpenPerVisitor;
     }
@@ -72,6 +77,11 @@ public class RoomService {
 
     public boolean isOpen(String roomId) {
         return rooms.existsByIdAndClosedAtIsNull(roomId);
+    }
+
+    /** 항상 열려 있는 기본 방인지 */
+    public boolean isDefault(String roomId) {
+        return rooms.findById(roomId).map(Room::isDefault).orElse(false);
     }
 
     public Optional<String> themeIdOf(String roomId) {
@@ -114,6 +124,7 @@ public class RoomService {
             room.updateOccupancy(occupied, now); // 서버 재시작 등으로 놓친 기록을 맞춘다
             if (!occupied && room.isIdleFor(idleClose, now)) {
                 room.close(now);
+                events.publishEvent(new RoomClosedEvent(room.getId())); // 커밋된 뒤 채팅 기록 등을 정리
             }
         }
     }

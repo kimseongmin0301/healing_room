@@ -186,12 +186,40 @@ body:not(.in-room) canvas { display: none; }
 
 .controls { right: 24px; bottom: 24px; display: flex; gap: 8px; }
 
+/* ---------- 채팅 ---------- */
+.chat {
+  right: 24px; bottom: 72px; width: 320px; padding: 10px 12px; box-sizing: border-box;
+  display: flex; flex-direction: column; max-height: calc(100vh - 340px); min-height: 0;
+}
+.chat-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.chat-title { font-weight: 600; }
+.badge { min-width: 18px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: #2a160a; font-size: 11px; text-align: center; }
+.chat-nick { margin-left: auto; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-nick-form { margin-left: auto; display: flex; gap: 4px; }
+.chat-nick-form input {
+  width: 110px; padding: 4px 8px; border-radius: 8px; font-size: 12px;
+  background: rgba(0, 0, 0, .35); border: 1px solid var(--line); outline: none; color: var(--text);
+}
+.chat-body { display: flex; flex-direction: column; min-height: 0; margin-top: 8px; }
+.chat.collapsed .chat-body { display: none; }
+.chat-list {
+  list-style: none; margin: 0; padding: 0 4px 0 0; flex: 1 1 auto; min-height: 80px; max-height: 320px;
+  overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .25) transparent;
+}
+.chat-list .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 16px 0; }
+.chat-line { font-size: 13px; line-height: 1.45; word-break: break-word; }
+.chat-line .who { font-weight: 600; margin-right: 6px; }
+.chat-line .when { color: var(--muted); font-size: 11px; margin-left: 6px; }
+.chat-line.mine .who::after { content: ' (나)'; font-weight: 400; color: var(--muted); font-size: 11px; }
+
 /* ---------- 좁은 화면 ---------- */
 @media (max-width: 720px) {
   .top-right { display: none; }
   .music, .music.min, .music.max { left: 16px; right: 16px; bottom: 16px; width: auto; }
   .player { width: 100%; height: 200px; }
   .controls { top: 20px; right: 16px; bottom: auto; }
+  .chat { top: 64px; left: 16px; right: 16px; bottom: auto; width: auto; max-height: 45vh; }
   .top-left { left: 16px; }
 }
 .rec-items { list-style: none; margin: 0; padding: 0; }

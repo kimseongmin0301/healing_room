@@ -1,12 +1,13 @@
 // 진입점: 주소의 #방id 에 따라 로비 또는 방을 보여준다.
 //  - 로비: 방 카드 목록 (lobby.js)
-//  - 방: 배경 + 효과(scene.js, effects/*), 함께 듣는 음악(music.js), 환경음(audio/mixer.js), 실시간 연결(room-socket.js)
+//  - 방: 배경 + 효과(scene.js, effects/*), 함께 듣는 음악(music.js), 환경음(audio/mixer.js), 채팅(chat.js), 실시간 연결(room-socket.js)
 import { Scene } from './scene.js';
 import { api, store } from './api.js';
 import { connectRoom } from './room-socket.js';
 import { showLobby, hideLobby } from './lobby.js';
 import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAudible } from './music.js';
 import { enterMixer, leaveMixer, setAmbientEnabled } from './audio/mixer.js';
+import { initChat, enterChat, leaveChat, receiveChat } from './chat.js';
 
 const $ = id => document.getElementById(id);
 const scene = new Scene($('scene'));
@@ -83,12 +84,17 @@ async function enterRoom(id) {
   enterMixer(room.id, ambients);
   enterMusic(room.id);
   socket = connectRoom(room.id, {
+    onChat: receiveChat,
     onState: state => {
       applyState(state);
       setPresence(state.listeners);
       $('host-chip').hidden = !state.hostIsMe;
     },
-    onStatus: status => { if (status === 'reconnecting') $('presence-text').textContent = '다시 연결하는 중…'; },
+    // 소켓이 연결된 뒤(=방에 들어온 뒤)에 지난 대화를 불러온다
+    onStatus: status => {
+      if (status === 'open') enterChat(room.id);
+      if (status === 'reconnecting') $('presence-text').textContent = '다시 연결하는 중…';
+    },
   });
 }
 
@@ -97,6 +103,7 @@ function leaveRoom() {
   socket = null;
   leaveMusic();
   leaveMixer();
+  leaveChat();
   if (current?.media instanceof HTMLVideoElement) {
     current.media.pause();
     current.media.removeAttribute('src');
@@ -179,6 +186,7 @@ scene.canvas.onclick = e => current?.effect.click(...scene.toUV(e.clientX, e.cli
 addEventListener('hashchange', route);
 
 initMusic();
+initChat();
 renderSoundButtons();
 route();
 

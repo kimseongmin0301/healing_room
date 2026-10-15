@@ -9,6 +9,7 @@
 - **살아 움직이는 배경**: 실사 사진 위에 불꽃, 불씨, 눈, 물결, 별 같은 효과가 움직여요.
 - **함께 듣는 음악**: 같은 방 사람들은 YouTube 음악을 같은 곡, 같은 위치로 들어요. 라디오처럼요.
 - **누구나 방 만들기**: 테마를 골라 방을 만들고, 방장이 음악 재생을 관리해요.
+- **채팅**: 같은 방 사람들과 이야기를 나눠요. 로그인 없이 자동으로 붙는 닉네임을 쓰고, 원하면 바꿀 수 있어요.
 
 ![로비](docs/screenshots/lobby.png)
 
@@ -66,6 +67,13 @@
 - 재생할 수 없는 영상(삭제됨, 외부 재생 금지)이면 자동으로 넘기기에 한 표를 넣어요.
 - 음악 창은 **기본, 최소화, 최대화** 세 가지 크기로 바꿀 수 있어요.
 
+### 채팅
+- 방마다 채팅 창이 있어요. 늦게 들어와도 **최근 대화 100개**를 볼 수 있어요.
+- 닉네임은 "졸린 고양이", "따뜻한 장작"처럼 자동으로 붙고, ✎를 눌러 바꿀 수 있어요(이 브라우저에 저장).
+- 대화 보관: 사용자가 만든 방은 **방이 닫힐 때 함께 지워지고**, 기본 방은 **최근 24시간** 대화만 보여요.
+- 도배 방지: 한 사람이 10초에 6개까지 보낼 수 있어요.
+- 채팅 창은 접을 수 있고, 접어 둔 동안 온 메시지 수를 보여줘요.
+
 ### 환경음
 - 장작, 바람, 비, 파도, 풀벌레 소리를 **녹음 파일 없이 브라우저에서 합성**해요. 슬라이더로 섞을 수 있어요.
 - **음악과 환경음은 따로 켜고 꺼요.** 음악이 나오는 동안에는 환경음이 자동으로 쉬었다가, 음악이 멈추면 다시 나와요. 직접 누른 설정이 항상 우선이에요.
@@ -78,6 +86,7 @@
 2. 방에 들어가면 음악과 환경음이 나와요. 주소로 바로 들어왔다면 브라우저 정책 때문에 오른쪽 아래 **음악 켜기**, **환경음 켜기**를 직접 눌러야 해요.
 3. 음악 창 아래 입력칸에 **YouTube 링크를 붙여넣고 신청**해요. **추천** 탭에서 한 번에 신청할 수도 있어요.
 4. 방장이라면 이름 옆에 **"내가 방장"**이 보이고, 재생 위치 바와 ❚❚ 버튼으로 모두의 재생을 조작할 수 있어요.
+5. 오른쪽 아래 **채팅** 창에서 같은 방 사람들과 이야기해요.
 
 > 방 주소를 친구에게 보내면 같은 방에 들어올 수 있어요. 예: `http://{서버 주소}:8080/#ab3k9xqz`
 
@@ -88,7 +97,7 @@
 | 영역 | 기술 |
 |---|---|
 | Backend | Java 17 · Spring Boot 4.1 · Spring Data JPA · Spring WebSocket · Gradle |
-| Database | PostgreSQL 16 |
+| Database | PostgreSQL 16 · Redis 7 (채팅) |
 | Frontend | HTML · CSS · JavaScript (ES Modules, 프레임워크 없음) · Canvas 2D · Web Audio |
 | 외부 서비스 | YouTube IFrame Player API (재생, 키 불필요) · YouTube oEmbed (영상 확인, 키 불필요) · YouTube Data API v3 (비슷한 영상 추천, 키 필요) |
 
@@ -99,6 +108,7 @@
 ### 1. 준비물
 - **JDK 17**
 - **PostgreSQL** 서버 (16에서 확인)
+- **Redis** 서버 (7에서 확인) — 채팅에 써요
 
 ### 2. 코드 받기
 ```bash
@@ -118,7 +128,9 @@ cp healing_room/healing-room/.env.example healing_room/healing-room/.env
 | `DB_USERNAME`, `DB_PASSWORD` | ✅ | 앱이 사용할 계정 |
 | `DB_ADMIN_USERNAME`, `DB_ADMIN_PASSWORD` | | DB를 처음 만들 때만 쓰는 관리자 계정이에요. 앱은 사용하지 않아요 |
 | `YOUTUBE_API_KEY` | | "비슷한 영상" 추천에만 써요. 비워 두면 그 추천만 꺼지고 나머지는 동작해요 |
-| `REDIS_*` | | 지금은 사용하지 않아요. 서버를 여러 대로 늘릴 때 쓸 예정이에요 |
+| `REDIS_HOST`, `REDIS_PORT` | ✅ | Redis 주소와 포트 |
+| `REDIS_USERNAME`, `REDIS_PASSWORD` | ✅ | 이 앱 전용 Redis 계정 (아래 참고) |
+| `REDIS_DATABASE` | | 사용할 Redis DB 번호 (기본 1) |
 
 <details>
 <summary><b>YouTube API 키 받는 법</b></summary>
@@ -129,6 +141,20 @@ cp healing_room/healing-room/.env.example healing_room/healing-room/.env
 4. 키를 `.env`의 `YOUTUBE_API_KEY=` 뒤에 넣고 서버를 다시 시작해요.
 
 무료 사용량은 하루 10,000이고 검색 한 번에 100을 써요. 같은 곡의 검색 결과는 12시간 동안 다시 쓰기 때문에 곡이 바뀔 때만 사용량이 줄어요. 추천에는 다른 사이트에서 재생할 수 있는 **음악 영상만** 나오고, 재생이 막히기 쉬운 라이브 방송은 빠져요.
+</details>
+
+<details>
+<summary><b>Redis 전용 계정 만드는 법</b> (다른 서비스와 Redis 를 같이 쓸 때)</summary>
+
+이 앱은 `healing-room:`으로 시작하는 키와 채널만 쓰므로, 그것만 다룰 수 있는 계정을 만들어요. Redis 관리자 계정으로 접속해서 실행하세요.
+
+```text
+ACL SETUSER healing_room on >긴-무작위-비밀번호 resetkeys ~healing-room:* resetchannels &healing-room:* +@all -@dangerous
+ACL SAVE
+```
+
+`ACL SAVE`는 ACL 파일(`aclfile`)을 쓰는 경우이고, 계정이 `redis.conf`에 있다면 `CONFIG REWRITE`를 써요. 재시작은 필요 없어요.
+새 계정으로 `SET healing-room:test ok`는 되고 `FLUSHDB`는 `NOPERM`이 나오면 정상이에요.
 </details>
 
 ### 4. DB 만들기 (처음 한 번)
@@ -169,7 +195,7 @@ cd healing_room/healing-room
 cd healing_room/healing-room
 ./gradlew test
 ```
-대부분의 테스트는 DB 없이 돌아가요. `HealingRoomApplicationTests`만 실제 DB에 접속해서 **코드와 테이블이 맞는지 확인**해요(읽기만 함). 그래서 `.env`가 있어야 해요.
+대부분의 테스트는 DB와 Redis 없이 돌아가요. `HealingRoomApplicationTests`만 실제 DB와 Redis에 접속해서 **코드와 테이블이 맞는지 확인**해요(읽기만 함). 그래서 `.env`가 있어야 해요.
 
 ---
 
@@ -191,6 +217,7 @@ healing_room/
       │  │  ├─ theme/               테마 (배경, 효과, 환경음, 기본 음악)
       │  │  ├─ room/                방 만들기, 목록, 빈 방 닫기
       │  │  ├─ queue/               함께 듣는 음악 (대기열, 투표, 방장 조작)
+      │  │  ├─ chat/                방 채팅 (Redis)
       │  │  ├─ recommend/           곡 추천
       │  │  └─ presence/            방 접속자와 방장 (WebSocket)
       │  └─ global/                 공통 설정, 오류 응답
@@ -200,6 +227,7 @@ healing_room/
             ├─ app.js               화면 전환 (로비 ↔ 방)
             ├─ lobby.js             로비, 방 만들기
             ├─ music.js             YouTube 동기화, 대기열, 추천
+            ├─ chat.js              채팅
             ├─ room-socket.js       실시간 연결
             ├─ scene.js             배경 캔버스
             ├─ audio/               환경음 합성과 믹서
@@ -227,7 +255,9 @@ healing_room/
 | PUT | `/api/rooms/{roomId}/queue/playback` | 방장: `pause` / `resume` / `seek` |
 | PUT | `/api/rooms/{roomId}/queue/{itemId}/move` | 방장: 대기열 순서 `up` / `down` |
 | GET | `/api/rooms/{roomId}/recommendations` | 곡 추천 |
-| WS | `/ws/rooms/{roomId}?visitorId=…` | 방 접속. 음악 상태가 바뀔 때마다 받아요 |
+| GET | `/api/rooms/{roomId}/chat` | 지난 대화 (최근 100개) |
+| POST | `/api/rooms/{roomId}/chat` | 채팅 보내기 `{ "nickname", "text" }` |
+| WS | `/ws/rooms/{roomId}?visitorId=…` | 방 접속. 음악 상태와 새 채팅을 받아요 |
 
 ---
 
@@ -265,6 +295,8 @@ export function create(scene) {
 | "재생할 수 없는 영상이에요" | 업로더가 외부 재생을 막은 영상이에요. 다른 영상을 신청해요. |
 | 추천에 "비슷한 영상"이 안 나와요 | `.env`에 `YOUTUBE_API_KEY`를 넣고 서버를 다시 시작해요. 하루 사용량을 다 썼을 수도 있어요. |
 | 다른 기기에서 접속이 안 돼요 | PC 방화벽에서 8080 포트를 허용했는지 확인해요. |
+| "채팅 서버에 연결하지 못했어요" | Redis 주소·계정을 확인해요. `NOPERM`이 로그에 나오면 계정 권한(`~healing-room:*`, `&healing-room:*`)을 확인해요. 채팅만 안 되고 나머지는 동작해요. |
+| "조금 천천히 보내 주세요" | 10초에 6개를 넘게 보냈어요. 잠깐 기다리면 다시 보낼 수 있어요. |
 
 ---
 
@@ -287,9 +319,10 @@ export function create(scene) {
 - [x] 함께 듣는 YouTube 음악 (신청, 동기화, 과반 투표, 방장 조작, 지난 신청곡)
 - [x] 곡 추천 (내 기록, 비슷한 영상, 함께 신청된 곡, 테마 인기곡)
 - [x] 환경음 합성과 믹서, 음악 재생 중 자동 쉬기
+- [x] 방 채팅 (Redis)
 - [x] 배경 영상 지원 (영상 파일은 준비 중)
 - [ ] 테마 추가: 밤하늘, 숲, 모래사장, 클럽
-- [ ] 서버 여러 대 지원 (Redis로 접속자 공유)
+- [ ] 서버 여러 대 지원 (채팅은 준비됨, 접속자 목록·음악 대기열도 Redis로 공유 필요)
 
 ## 📝 참고
 

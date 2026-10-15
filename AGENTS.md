@@ -20,6 +20,7 @@
 - 누구나 YouTube 링크로 곡을 신청할 수 있습니다(개수 제한 없음). 대기열이 비면 테마 기본 음악이 순서대로 나옵니다.
 - 넘기기/빼기: **내 신청곡**과 **방장**은 바로, 그 밖에는 **방 인원의 50%를 넘는(과반) 투표**가 필요합니다. 대기열 순서는 방장만 바꿉니다.
 - 곡 추천: 내 신청 기록(브라우저), YouTube에서 찾은 비슷한 영상(API 키 필요), 함께 신청된 곡, 테마 인기곡.
+- **방 채팅**: 닉네임은 자동으로 붙고("졸린 고양이" 같은) 바꿀 수 있습니다(브라우저에 저장). 메시지는 Redis에 방마다 최근 100개를 보관하고, 사용자 방은 닫힐 때 지우며 기본 방은 최근 24시간만 보여줍니다.
 
 ## 2. 기술 스택
 
@@ -28,9 +29,9 @@
 | 백엔드 | Java 17, Spring Boot 4.1, Gradle(wrapper), Spring Web MVC, Spring Data JPA, Spring WebSocket |
 | DB | PostgreSQL 16 (DB 이름 `healing_room`) |
 | 실시간 | WebSocket (`/ws/rooms/{roomId}`). 접속자 목록은 서버 메모리에 보관 |
+| Redis | 7 (Spring Data Redis). **채팅** 보관·도배 방지·pub/sub. 전용 계정 `healing_room`, DB 1번, 키 접두어 `healing-room:` (6절) |
 | 프론트엔드 | 순수 HTML/CSS/JavaScript (ES Modules, 번들러 없음), Canvas 2D, Web Audio, YouTube IFrame Player API |
 | 테스트 | JUnit 5, MockMvc, Mockito (`@WebMvcTest`, `@MockitoBean`) |
-| Redis | **현재 사용하지 않음.** 서버를 여러 대로 늘릴 때 접속자 공유·이벤트 전달용으로 쓸 예정 (6절) |
 
 ## 3. 폴더 구조 (도메인별 패키지)
 
@@ -60,6 +61,7 @@
       │  │  ├─ repository/          RoomRepository
       │  │  ├─ entity/              Room
       │  │  ├─ dto/                 RoomResponse, RoomDetailResponse, CreateRoomRequest
+      │  │  ├─ event/               RoomClosedEvent (방이 닫히면 발행 → 채팅 기록 삭제)
       │  │  └─ exception/           RoomException
       │  ├─ queue/                  ← 함께 듣는 음악 (대기열·투표·방장 조작)
       │  │  ├─ controller/          QueueController          /api/rooms/{roomId}/queue/**
@@ -71,6 +73,13 @@
       │  │  ├─ exception/           QueueException
       │  │  ├─ client/              YouTubeOEmbedClient (영상 제목 조회, API 키 불필요)
       │  │  └─ util/                YouTubeLinks (링크 → 영상 id)
+      │  ├─ chat/                   ← 방 채팅 (Redis)
+      │  │  ├─ controller/          ChatController           GET/POST /api/rooms/{roomId}/chat
+      │  │  ├─ service/             ChatService(보내기·기록·pub/sub 수신·닫힌 방 정리), ChatPolicy(입력 규칙)
+      │  │  ├─ repository/          ChatRepository (StringRedisTemplate: List·카운터·publish)
+      │  │  ├─ entity/              ChatRecord (Redis 에 JSON 으로 저장, authorId 는 서버 전용)
+      │  │  ├─ dto/                 ChatMessageResponse, ChatSendRequest, ChatPush(type=chat)
+      │  │  └─ exception/           ChatException
       │  ├─ recommend/              ← 곡 추천
       │  │  ├─ controller/          RecommendController      GET /api/rooms/{roomId}/recommendations
       │  │  ├─ service/             RecommendService
@@ -79,9 +88,9 @@
       │  │  └─ dto/                 RecommendationResponse, VideoSuggestion
       │  └─ presence/               ← 방 접속(누가 어느 방에 있는지, 방장)
       │     ├─ handler/             RoomSocketHandler (WebSocket 연결/해제, 상태 전송)
-      │     └─ service/             RoomSessionRegistry (방별 접속자·들어온 순서·방장, 메모리)
+      │     └─ service/             RoomSessionRegistry (방별 접속자·들어온 순서·방장, 메모리), RoomBroadcaster (방 사람들에게 각자 기준으로 전송)
       └─ global/
-         ├─ config/                 WebSocketConfig
+         ├─ config/                 WebSocketConfig, RedisConfig (채팅 pub/sub 구독)
          └─ exception/              ApiException(공통 부모), GlobalExceptionHandler (→ { "message": ... })
 
    src/main/resources/
@@ -94,6 +103,7 @@
             ├─ lobby.js             로비 방 카드 + 인원, 방 만들기
             ├─ room-socket.js       WebSocket 연결·재연결
             ├─ music.js             YouTube 플레이어 동기화, 방장 조작, 대기열/지난 신청곡/추천 탭, 내 신청 기록, 창 최소화·최대화
+            ├─ chat.js              채팅 창 (지난 대화, 보내기, 실시간 수신, 닉네임, 접기·안 읽은 수)
             ├─ scene.js             캔버스 공통 도구 (cover 맞춤, 좌표 변환, wobble, glow, 배경 영상)
             ├─ audio/sounds.js      환경음 합성 (fire, wind, rain, waves, crickets)
             ├─ audio/mixer.js       환경음 믹서 UI
@@ -118,7 +128,7 @@ cd healing-room
 - `.env`는 `healing-room/.env`에 둡니다. `spring.config.import=optional:file:.env[.properties]`로 읽으므로 **작업 디렉터리가 `healing-room/`이어야** 합니다.
 - 포트는 환경변수 `PORT`가 있으면 그 값, 없으면 8080입니다.
 - 같은 네트워크의 다른 기기에서는 `http://{PC의 IP}:8080`으로 접속합니다. **HTTPS가 아닌 IP 접속에서는 `crypto.randomUUID()` 같은 보안 컨텍스트 전용 API가 없으니** 프론트엔드에서 쓰지 마세요(`api.js`의 `uuid()` 참고).
-- `HealingRoomApplicationTests`(@SpringBootTest)는 **실제 DB에 접속**해서 엔티티와 테이블이 맞는지 검증합니다(읽기만 함). `.env`가 없으면 실패해요.
+- `HealingRoomApplicationTests`(@SpringBootTest)는 **실제 DB와 Redis에 접속**합니다. DB는 엔티티와 테이블이 맞는지 검증만 하고(읽기만 함), Redis는 채팅 채널을 구독만 합니다. `.env`가 없으면 실패해요.
 - **서버는 한 대만 띄우세요.** 대기열 진행(스케줄러)과 접속자 목록이 서버 메모리 기준이라, 같은 DB에 서버 두 대를 붙이면 곡이 두 번 넘어가는 등 꼬입니다.
 
 ## 5. ⚠️ DB 규칙 (반드시 지킬 것)
@@ -144,13 +154,30 @@ cd healing-room
 
 > V1~V4 파일 안의 `room` 은 지금의 `theme` 입니다(V5 에서 이름이 바뀜).
 
-## 6. Redis (현재 미사용)
+## 6. ⚠️ Redis 규칙
 
-- 처음에는 현재 인원 표시에 Redis를 썼지만, `.env`의 Redis 계정이 ACL 때문에 이 앱의 키에 쓰기 권한이 없어서(`NOPERM`) **WebSocket 접속자(서버 메모리) 방식으로 바꿨습니다.** 지금 앱은 Redis에 접속하지 않습니다.
-- 서버를 여러 대로 늘릴 때 다시 도입합니다. 그때 지킬 것:
-  - Redis는 **다른 서비스와 공유**합니다(그 서비스가 DB 0번, 5번 사용). 이 앱은 **DB 1번**, **키 접두어 `healing-room:`**만 씁니다.
-  - `FLUSHDB`, `FLUSHALL`, `KEYS *` 같은 전체 대상 명령은 절대 쓰지 마세요.
-  - 전용 계정(`~healing-room:*` 권한)을 먼저 만들어야 합니다.
+Redis는 **다른 서비스(other-service)와 같은 서버를 공유**합니다. 그 서비스가 DB 0번, 5번을 씁니다.
+
+- 이 앱은 전용 계정 **`healing_room`**으로만 접속합니다. ACL: `~healing-room:* &healing-room:* +@all -@dangerous`
+  → `healing-room:`으로 시작하는 키·채널만 쓸 수 있고 `FLUSHDB`, `FLUSHALL`, `KEYS`, `CONFIG` 같은 위험한 명령은 막혀 있습니다.
+- **DB 1번**(`REDIS_DATABASE`)을 쓰고, 모든 키·채널 앞에 **`healing-room:`**(`healing-room.redis.key-prefix`)을 붙입니다. 새 키를 만들 때도 반드시 이 접두어를 붙이세요(안 붙이면 `NOPERM`).
+- 전체 대상 명령(`FLUSHDB`, `FLUSHALL`, `KEYS *`)은 절대 쓰지 마세요. 키를 찾아야 하면 `SCAN` + 접두어 패턴을 씁니다.
+- 계정 권한을 바꿀 때는 Redis 관리자 계정으로 `ACL SETUSER` 후 `ACL SAVE`를 실행합니다(재시작 필요 없음, 다른 서비스에 영향 없음). 관리자 정보는 저장소에 적지 않습니다.
+- Redis가 실패해도 방·음악은 동작해야 합니다. 채팅만 503(`ChatException.Unavailable`)을 돌려줍니다.
+
+### 쓰는 키와 채널
+| 키/채널 | 종류 | 용도 | 수명 |
+|---|---|---|---|
+| `healing-room:chat:{roomId}` | List (JSON) | 방의 최근 메시지 100개 | 기본 방: 마지막 메시지 후 24시간 / 사용자 방: 닫힐 때 삭제(놓쳐도 7일 뒤 자동 삭제) |
+| `healing-room:chat-rate:{visitorId}` | String (카운터) | 도배 방지 (10초에 6개) | 10초 |
+| `healing-room:chat` | pub/sub 채널 | 새 메시지를 모든 서버에 알림 | - |
+
+### 채팅 흐름 (ChatService)
+1. `POST /api/rooms/{roomId}/chat` → 방에 접속해 있는지 확인 → 입력 정리(`ChatPolicy`: 제어 문자 제거, 메시지 300자·닉네임 12자) → 도배 확인
+2. Redis List 에 저장(최근 100개만 남김) → `healing-room:chat` 채널로 publish
+3. `RedisConfig` 의 구독자가 받아서 `RoomBroadcaster` 로 이 서버에 접속한 방 사람들에게 `{ type: "chat", message }` 전송. `mine` 은 받는 사람마다 계산하고 **보낸 사람의 방문자 id 는 절대 내보내지 않습니다.**
+4. 방이 닫히면(`RoomClosedEvent`) 그 방의 채팅 키를 지웁니다.
+- 화면은 메시지를 `textContent`로만 넣습니다(HTML로 해석하지 않음). 서버는 HTML을 바꾸지 않습니다.
 
 ## 7. 환경변수 (`healing-room/.env`)
 
@@ -159,7 +186,9 @@ cd healing-room
 | `DB_HOST`, `DB_PORT`, `DB_NAME` | PostgreSQL 접속 정보 (`DB_NAME=healing_room`) |
 | `DB_USERNAME`, `DB_PASSWORD` | 앱 계정 (healing_room DB 소유자) |
 | `DB_ADMIN_USERNAME`, `DB_ADMIN_PASSWORD` | 관리자 계정, 수동 작업 전용 (앱에서 사용 금지) |
-| `REDIS_HOST`, `REDIS_PORT`, `REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_DATABASE` | Redis 접속 정보 (현재 미사용, 6절) |
+| `REDIS_HOST`, `REDIS_PORT` | Redis 접속 정보 |
+| `REDIS_USERNAME`, `REDIS_PASSWORD` | 전용 계정 `healing_room` (6절) |
+| `REDIS_DATABASE` | Redis DB 번호 (1) |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 키. 추천의 "비슷한 영상"에만 쓰며, 비워 두면 그 기능만 꺼짐. 검색 1번 = 하루 할당량 10,000 중 100 |
 
 `.env`는 절대 커밋하지 마세요. 새 키를 추가하면 `.env.example`도 함께 고치세요.
@@ -184,7 +213,9 @@ cd healing-room
 | PUT | `/api/rooms/{roomId}/queue/playback` | **방장** `{ "action": "pause" \| "resume" \| "seek", "seconds"? }` |
 | PUT | `/api/rooms/{roomId}/queue/{itemId}/move` | **방장** 대기열 순서 `{ "direction": "up" \| "down" }` |
 | GET | `/api/rooms/{roomId}/recommendations` | 지금 곡 기준 추천 `{ basedOn, similar, similarAvailable, together, popular }` |
-| WS | `/ws/rooms/{roomId}?visitorId={uuid}` | 연결돼 있는 동안 "방에 있음". 서버가 `PlayerState`(type=`state`)를 보냄. 닫힌 방이면 연결 거부 |
+| GET | `/api/rooms/{roomId}/chat` | 지난 대화 (오래된 것부터, 최대 100개) `[{ id, nickname, text, sentAt, mine }]` |
+| POST | `/api/rooms/{roomId}/chat` | 채팅 보내기 `{ "nickname", "text" }` → 201. 10초에 6개 넘으면 429, Redis 장애 시 503 |
+| WS | `/ws/rooms/{roomId}?visitorId={uuid}` | 연결돼 있는 동안 "방에 있음". 서버가 `PlayerState`(type=`state`)와 새 채팅(type=`chat`)을 보냄. 닫힌 방이면 연결 거부 |
 
 ### 함께 듣는 음악 동작 (QueueService)
 - 곡 신청 시 oEmbed로 영상 확인·제목 조회 → 대기열 맨 뒤. 기본 음악이 나오는 중이면 바로 신청곡으로 넘어갑니다.
@@ -245,6 +276,7 @@ cd healing-room
 - [x] 배경 영상 지원 (`theme.background_video`, 아직 영상 파일은 없음)
 - [x] 방 만들기 (이름 + 테마), 방장(재생 조작·순서 바꾸기), 빈 방 30분 뒤 닫기
 - [x] 곡 추천 (내 신청 기록, 비슷한 영상, 함께 신청된 곡, 테마 인기곡)
+- [x] 방 채팅 (Redis 보관·도배 방지·pub/sub, 자동 닉네임)
 - [ ] 테마 추가: 밤하늘, 숲, 모래사장, 클럽 (배경 이미지/영상 필요)
 - [ ] 클럽 방 비트 효과
 - 로그인 기능은 **만들지 않습니다** (익명 서비스).

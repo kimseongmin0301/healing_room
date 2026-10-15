@@ -1,7 +1,7 @@
-// 방 WebSocket 연결. 연결돼 있는 동안 "방에 있는 사람"으로 세어지고, 서버가 음악 상태를 보내준다.
+// 방 WebSocket 연결. 연결돼 있는 동안 "방에 있는 사람"으로 세어지고, 서버가 음악 상태(state)와 채팅(chat)을 보내준다.
 import { visitorId } from './api.js';
 
-export function connectRoom(roomId, { onState, onStatus }) {
+export function connectRoom(roomId, { onState, onChat, onStatus }) {
   let ws = null;
   let closed = false;
   let retry = 0;
@@ -19,6 +19,7 @@ export function connectRoom(roomId, { onState, onStatus }) {
     ws.onmessage = e => {
       const message = JSON.parse(e.data);
       if (message.type === 'state') onState(message);
+      else if (message.type === 'chat') onChat?.(message.message);
     };
     ws.onclose = () => {
       clearInterval(pingTimer);

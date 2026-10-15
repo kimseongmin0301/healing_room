@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.UUID;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -15,8 +13,7 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import tools.jackson.databind.json.JsonMapper;
-
+import com.healingroom.domain.presence.service.RoomBroadcaster;
 import com.healingroom.domain.presence.service.RoomSessionRegistry;
 import com.healingroom.domain.queue.dto.PlayerState;
 import com.healingroom.domain.queue.event.QueueChangedEvent;
@@ -27,26 +24,26 @@ import com.healingroom.domain.room.service.RoomService;
  * /ws/rooms/{roomId}?visitorId={uuid}
  *
  * <p>방에 들어오면 연결하고, 연결돼 있는 동안 "방에 있는 사람"으로 센다.
- * 서버 → 브라우저로 음악 상태({@link PlayerState})를 보내는 용도이며, 브라우저의 동작(등록·투표)은 REST API 로 받는다.
+ * 서버 → 브라우저로 음악 상태({@link PlayerState}, type=state)와 채팅(type=chat)을 보내는 용도이며,
+ * 브라우저의 동작(신청·투표·채팅 보내기)은 REST API 로 받는다.
  */
 @Component
 public class RoomSocketHandler extends TextWebSocketHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(RoomSocketHandler.class);
     private static final String ROOM = "roomId";
     private static final String VISITOR = "visitorId";
 
     private final RoomSessionRegistry sessions;
+    private final RoomBroadcaster broadcaster;
     private final RoomService roomService;
     private final QueueService queueService;
-    private final JsonMapper json;
 
-    public RoomSocketHandler(RoomSessionRegistry sessions, RoomService roomService, QueueService queueService,
-                             JsonMapper json) {
+    public RoomSocketHandler(RoomSessionRegistry sessions, RoomBroadcaster broadcaster, RoomService roomService,
+                             QueueService queueService) {
         this.sessions = sessions;
+        this.broadcaster = broadcaster;
         this.roomService = roomService;
         this.queueService = queueService;
-        this.json = json;
     }
 
     @Override
@@ -61,7 +58,7 @@ public class RoomSocketHandler extends TextWebSocketHandler {
             raw.close(CloseStatus.POLICY_VIOLATION);
             return;
         }
-        // 여러 스레드(스케줄러, 요청 스레드)에서 동시에 보내도 안전하도록 감싼다
+        // 여러 스레드(스케줄러, 요청 스레드, Redis 구독)에서 동시에 보내도 안전하도록 감싼다
         WebSocketSession session = new ConcurrentWebSocketSessionDecorator(raw, 5000, 512 * 1024);
         raw.getAttributes().put(ROOM, roomId);
         raw.getAttributes().put(VISITOR, visitorId);
@@ -89,22 +86,14 @@ public class RoomSocketHandler extends TextWebSocketHandler {
     @EventListener
     public void onQueueChanged(QueueChangedEvent event) {
         String roomId = event.roomId();
-        var connections = sessions.connections(roomId);
-        if (connections.isEmpty()) {
+        if (sessions.connections(roomId).isEmpty()) {
             return;
         }
         PlayerState.Snapshot snapshot = queueService.snapshot(roomId);
         var present = sessions.visitors(roomId);
         String hostId = sessions.host(roomId).orElse(null);
         long now = System.currentTimeMillis();
-        for (RoomSessionRegistry.Connection connection : connections) {
-            try {
-                PlayerState state = snapshot.forVisitor(connection.visitorId(), present, hostId, now);
-                connection.session().sendMessage(new TextMessage(json.writeValueAsString(state)));
-            } catch (IOException | IllegalStateException e) {
-                log.debug("상태 전송 실패 (room={}, session={}): {}", roomId, connection.session().getId(), e.getMessage());
-            }
-        }
+        broadcaster.send(roomId, visitorId -> snapshot.forVisitor(visitorId, present, hostId, now));
     }
 
     private static boolean isUuid(String value) {
