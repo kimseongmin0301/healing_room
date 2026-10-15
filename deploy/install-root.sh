@@ -13,7 +13,6 @@
 set -euo pipefail
 
 DOMAIN=healing.kimseongmin.co.kr
-SERVER_IP=203.0.113.10
 APP_PORT=18280
 HERE=$(cd "$(dirname "$0")" && pwd)
 SITE=/etc/nginx/sites-available/$DOMAIN
@@ -70,9 +69,11 @@ fi
 
 step "3/4 HTTPS 인증서"
 resolved=$(getent ahostsv4 "$DOMAIN" | awk 'NR==1{print $1}' || true)
-if [ "$resolved" != "$SERVER_IP" ]; then
+# 이 서버의 공인 IP (공유기 뒤에 있으면 서버 안에서는 사설 IP 만 보이므로 밖에 물어본다)
+SERVER_IP=$(python3 -c 'import urllib.request; print(urllib.request.urlopen("https://api.ipify.org", timeout=5).read().decode())' 2>/dev/null || true)
+if [ -z "$resolved" ] || { [ -n "$SERVER_IP" ] && [ "$resolved" != "$SERVER_IP" ]; }; then
   echo "DNS 가 아직 이 서버를 가리키지 않아요 ($DOMAIN → ${resolved:-없음})."
-  echo "도메인 관리 화면에서 A 레코드(healing → $SERVER_IP)를 추가하고, 반영된 뒤 이 스크립트를 다시 실행하세요."
+  echo "도메인 관리 화면에서 healing 레코드(A: ${SERVER_IP:-이 서버 공인 IP} 또는 CNAME)를 추가하고, 반영된 뒤 이 스크립트를 다시 실행하세요."
   exit 0
 fi
 if [ ! -f "$CERT" ]; then

@@ -170,7 +170,7 @@ cd healing-room
 
 ## 6. ⚠️ Redis 규칙
 
-Redis는 **다른 서비스(other-service)와 같은 서버를 공유**합니다. 그 서비스가 DB 0번, 5번을 씁니다.
+Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스들이 다른 DB 번호를 씁니다.
 
 - 이 앱은 전용 계정 **`healing_room`**으로만 접속합니다. ACL: `~healing-room:* &healing-room:* +@all -@dangerous`
   → `healing-room:`으로 시작하는 키·채널만 쓸 수 있고 `FLUSHDB`, `FLUSHALL`, `KEYS`, `CONFIG` 같은 위험한 명령은 막혀 있습니다.
@@ -293,7 +293,7 @@ Redis는 **다른 서비스(other-service)와 같은 서버를 공유**합니다
 
 - 주소: **https://healing.kimseongmin.co.kr** (nginx → `127.0.0.1:18280`). SSH 별칭 `ai-server`(`~/.ssh/config`).
 - DB·Redis 가 같은 서버에 있어서 운영 `.env` 는 `127.0.0.1` 로 접속합니다.
-- 서버 폴더 (other-app 와 같은 구조)
+- 서버 폴더
   ```
   ~/healing-room/
   ├─ releases/{날짜}-{커밋}/healing-room.jar   최근 5개 보관
@@ -307,7 +307,7 @@ Redis는 **다른 서비스(other-service)와 같은 서버를 공유**합니다
   - `deploy/ci-receive.sh` 를 고치면 서버에 **직접 복사**해야 합니다(배포 키로는 바꿀 수 없음): `scp deploy/ci-receive.sh ai-server:healing-room/deploy/`
   - 손으로 배포·되돌리기: 저장소 루트에서 `bash deploy/deploy.sh`, `bash deploy/deploy.sh rollback`.
 - **sudo 가 필요한 설치**(서비스 등록, nginx, 인증서)는 `deploy/install-root.sh` 를 사람이 직접 실행합니다. AI 는 sudo 비밀번호를 다루지 않습니다. 재시작만 `/etc/sudoers.d/healing-room` 으로 비밀번호 없이 허용합니다.
-- nginx 는 **`sites-available/healing.kimseongmin.co.kr` 파일만** 이 앱 것입니다. 기존 `kimseongmin.co.kr` 설정 파일은 다른 서비스(메인, RAG, other-app)가 쓰므로 절대 수정하지 마세요. 적용 전에는 항상 `nginx -t`.
+- nginx 는 **`sites-available/healing.kimseongmin.co.kr` 파일만** 이 앱 것입니다. 기존 메인 도메인 설정 파일은 다른 서비스가 쓰므로 절대 수정하지 마세요. 적용 전에는 항상 `nginx -t`.
 - 운영 서버에 붙은 앱과 **같은 DB 를 쓰는 서버를 로컬에서 동시에 띄우지 마세요**(대기열 스케줄러가 두 번 돕니다). 로컬 개발용 DB 를 따로 두는 게 좋습니다.
 
 ## 12. 로드맵 / 진행 상황
