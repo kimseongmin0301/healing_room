@@ -4,6 +4,19 @@ import { rand } from '../scene.js';
 const HORIZON = 0.634;
 const MOON = [0.4995, 0.571];
 
+// 부드러운 빛 알갱이 이미지 (가운데 밝고 가장자리로 사라짐). 한 번만 만들어 두고 크기만 바꿔 그린다
+const SPARKLE = (() => {
+  const c = Object.assign(document.createElement('canvas'), { width: 32, height: 32 });
+  const g = c.getContext('2d');
+  const gradient = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gradient.addColorStop(0, 'rgba(255,242,210,1)');
+  gradient.addColorStop(0.35, 'rgba(255,230,180,.55)');
+  gradient.addColorStop(1, 'rgba(255,220,160,0)');
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, 32, 32);
+  return c;
+})();
+
 export function create(scene) {
   const { ctx } = scene;
   const stars = Array.from({ length: 160 }, () => ({
@@ -20,17 +33,25 @@ export function create(scene) {
       (Math.sin(v * 260 - t * 0.045) * 0.6 + Math.sin(v * 90 + t * 0.03) * 0.4) * (0.4 + p * 4) * k);
 
     ctx.globalCompositeOperation = 'lighter';
-    // 2) 달빛 반사 반짝임
-    if (Math.random() < 0.9) glints.push({ u: 0.5 + rand(-1, 1) * rand(0, 1) * 0.05, v: rand(HORIZON + 0.005, 1), l: 1 });
-    for (let i = glints.length - 1; i >= 0; i--) {
-      const g = glints[i]; g.l -= 0.04;
-      if (g.l <= 0) { glints.splice(i, 1); continue; }
-      const spread = (g.v - HORIZON) / (1 - HORIZON);
-      const [gx, gy] = scene.P(0.5 + (g.u - 0.5) * (0.4 + spread * 2), g.v);
-      const w = 12 * k * (1 + spread * 2);
-      ctx.fillStyle = `rgba(255,236,190,${g.l * 0.7})`;
-      ctx.fillRect(gx - w / 2, gy, w, 1.4);
+    // 2) 달빛 반사 반짝임: 가장자리가 흐린 빛 알갱이가 달빛 길 안에서 서서히 켜졌다 꺼진다
+    if (Math.random() < 0.7) {
+      glints.push({
+        off: rand(-1, 1) * Math.random(),                                  // 달빛 길 가운데에 더 많이
+        v: HORIZON + 0.005 + Math.random() ** 1.3 * (1 - HORIZON - 0.005), // 수평선 가까이 조금 더 촘촘히
+        age: 0, life: rand(25, 60), size: rand(0.6, 1.4),
+      });
     }
+    for (let i = glints.length - 1; i >= 0; i--) {
+      const g = glints[i];
+      const p = ++g.age / g.life;
+      if (p >= 1) { glints.splice(i, 1); continue; }
+      const spread = (g.v - HORIZON) / (1 - HORIZON);                // 0 수평선 ~ 1 화면 아래
+      const [gx, gy] = scene.P(MOON[0] + g.off * (0.012 + spread * 0.05), g.v); // 가까울수록 달빛 길이 넓어진다
+      const w = (6 + spread * 14) * k * g.size, h = w * 0.35;
+      ctx.globalAlpha = Math.sin(Math.PI * p) * 0.55;
+      ctx.drawImage(SPARKLE, gx - w / 2, gy - h / 2, w, h);
+    }
+    ctx.globalAlpha = 1;
 
     // 3) 달 은은한 맥동
     const [mx, my] = scene.P(...MOON);

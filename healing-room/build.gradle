@@ -28,6 +28,11 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+tasks.named('bootRun') {
+	// 화면 파일(static)을 src 에서 바로 읽어, 고친 뒤 서버 재시작 없이 새로고침만으로 반영되게 한다
+	sourceResources sourceSets.main
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
 }

@@ -127,6 +127,7 @@ cd healing-room
 
 - `.env`는 `healing-room/.env`에 둡니다. `spring.config.import=optional:file:.env[.properties]`로 읽으므로 **작업 디렉터리가 `healing-room/`이어야** 합니다.
 - 포트는 환경변수 `PORT`가 있으면 그 값, 없으면 8080입니다.
+- `bootRun`은 `static/` 화면 파일을 `src`에서 바로 읽습니다(`build.gradle`의 `sourceResources`). 화면 파일은 고친 뒤 새로고침만 하면 되고, Java 코드를 고치면 재시작하세요. IntelliJ의 Application 실행 설정은 이 설정을 쓰지 않으니 빌드(Ctrl+F9)를 해야 반영됩니다.
 - 같은 네트워크의 다른 기기에서는 `http://{PC의 IP}:8080`으로 접속합니다. **HTTPS가 아닌 IP 접속에서는 `crypto.randomUUID()` 같은 보안 컨텍스트 전용 API가 없으니** 프론트엔드에서 쓰지 마세요(`api.js`의 `uuid()` 참고).
 - `HealingRoomApplicationTests`(@SpringBootTest)는 **실제 DB와 Redis에 접속**합니다. DB는 엔티티와 테이블이 맞는지 검증만 하고(읽기만 함), Redis는 채팅 채널을 구독만 합니다. `.env`가 없으면 실패해요.
 - **서버는 한 대만 띄우세요.** 대기열 진행(스케줄러)과 접속자 목록이 서버 메모리 기준이라, 같은 DB에 서버 두 대를 붙이면 곡이 두 번 넘어가는 등 꼬입니다.
