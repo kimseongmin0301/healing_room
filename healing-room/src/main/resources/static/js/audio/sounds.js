@@ -89,6 +89,26 @@ function burst(ctx, output, time, { freq, q = 1, length, level }) {
   src.start(time, Math.random() * 3, length + 0.05);
 }
 
+// 부드럽게 커졌다 작아지는 곡선 (Hann 창). 딱딱 끊기는 기계음 대신 자연스러운 소리가 난다
+const HANN = Float32Array.from({ length: 32 }, (_, i) => Math.sin((Math.PI * i) / 31) ** 2);
+
+/** 귀뚜라미 "찍" 한 번: 기본음 + 배음, 음이 살짝 내려가며 부드럽게 커졌다 작아진다 */
+function chirp(ctx, output, time, freq) {
+  const length = rand(0.012, 0.02);
+  const env = gain(ctx, 0);
+  env.gain.setValueCurveAtTime(HANN, time, length);
+  env.connect(output);
+  for (const [multiple, level] of [[1, 1], [2, 0.18]]) {
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(freq * multiple, time);
+    osc.frequency.exponentialRampToValueAtTime(freq * multiple * 0.96, time + length);
+    const g = gain(ctx, level);
+    osc.connect(g).connect(env);
+    osc.start(time);
+    osc.stop(time + length + 0.01);
+  }
+}
+
 // ---------------------------------------------------------------- 소리들
 
 export const SOUNDS = {
@@ -153,27 +173,47 @@ export const SOUNDS = {
     return { stop() { stopSwell(); src.stop(); } };
   },
 
-  /** 풀벌레: 높은 음으로 찌르르 */
+  /**
+   * 풀벌레 (실제 귀뚜라미처럼)
+   *  ① 한 번 울 때 아주 짧은 "찍"(음절) 3~5개. 음절마다 부드럽게 커졌다 작아지고 음이 살짝 내려가며 배음이 섞인다
+   *  ② 높이·박자·거리·좌우가 다른 여러 마리. 멀수록 작고 먹먹하게, 가끔 쉬었다 운다
+   *  ③ 멀리서 들리는 "쓰르르" 합창이 아주 작게 깔린다
+   */
   crickets(ctx, out) {
-    const stops = [4300, 5100].map((freq, i) => {
-      const osc = ctx.createOscillator();
-      osc.frequency.value = freq;
-      const env = gain(ctx, 0);
-      osc.connect(env).connect(out);
-      osc.start();
-      const stop = scheduler(ctx, 100, t => {
-        // 한 번 울 때 짧은 펄스 3~4개
-        const pulses = 3 + (Math.random() < 0.5 ? 1 : 0);
-        for (let p = 0; p < pulses; p++) {
-          const s = t + p * 0.045;
-          env.gain.setValueAtTime(0, s);
-          env.gain.linearRampToValueAtTime(0.12, s + 0.008);
-          env.gain.linearRampToValueAtTime(0, s + 0.03);
-        }
-        return t + rand(0.5, 1.1) + i * 0.13;
-      });
-      return () => { stop(); osc.stop(); };
-    });
-    return { stop() { stops.forEach(s => s()); } };
+    const stops = [];
+
+    // ③ 멀리서 들리는 합창: 4~5kHz 대역의 잡음을 빠르게 떨리게
+    const bed = noise(ctx, 'white');
+    const band = filter(ctx, 'bandpass', 4600, 8);
+    const trillGain = gain(ctx, 0.5);
+    const bedLevel = gain(ctx, 0.05);
+    bed.connect(band).connect(trillGain).connect(bedLevel).connect(out);
+    const trill = lfo(ctx, trillGain.gain, 38, 0.5);   // 초당 38번 떨림
+    const swell = lfo(ctx, bedLevel.gain, 0.07, 0.03); // 천천히 커졌다 작아짐
+    stops.push(() => { bed.stop(); trill.stop(); swell.stop(); });
+
+    // ①② 가까이·멀리 있는 여러 마리
+    for (let i = 0; i < 5; i++) {
+      const distance = Math.random();                       // 0 가까움 ~ 1 멀리
+      const level = gain(ctx, 0.09 * (1 - distance * 0.75));
+      const muffle = filter(ctx, 'lowpass', 9000 - distance * 5000);
+      level.connect(muffle);
+      if (ctx.createStereoPanner) {
+        const pan = ctx.createStereoPanner();
+        pan.pan.value = rand(-0.85, 0.85);
+        muffle.connect(pan).connect(out);
+      } else {
+        muffle.connect(out);
+      }
+      const freq = rand(3800, 5200);          // 마리마다 다른 높이
+      const gap = rand(0.028, 0.045);         // 음절 사이 간격
+      const syllables = 3 + Math.floor(Math.random() * 3);
+      stops.push(scheduler(ctx, 90, t => {
+        const n = syllables + (Math.random() < 0.3 ? 1 : 0);
+        for (let k = 0; k < n; k++) chirp(ctx, level, t + k * gap, freq * rand(0.995, 1.005));
+        return t + n * gap + (Math.random() < 0.15 ? rand(1.5, 4) : rand(0.35, 0.9));
+      }));
+    }
+    return { stop() { stops.forEach(stop => stop()); } };
   },
 };
