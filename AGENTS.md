@@ -42,7 +42,7 @@
 /                                   ← 저장소 루트
 ├─ AGENTS.md / CLAUDE.md / README.md
 ├─ docs/screenshots/               ← README 화면 캡처 (화면이 바뀌면 다시 찍기)
-├─ deploy/                          ← 운영 서버 배포 (systemd, nginx, 설치·배포 스크립트). 12절
+├─ deploy/                          ← 운영 서버 배포 (systemd, nginx, 설치·배포 스크립트). 11절
 ├─ design/                          ← 디자인 시안(SVG/PNG), 초기 프로토타입(live/)
 └─ healing-room/                    ← Spring Boot 앱 (Gradle 프로젝트 루트)
    ├─ .env.example                  ← 환경변수 형식 (.env 는 git 제외)
