@@ -23,12 +23,16 @@ import com.healingroom.domain.presence.service.RoomSessionRegistry;
 import com.healingroom.domain.queue.dto.PlayerState;
 import com.healingroom.domain.queue.dto.QueueHistoryResponse;
 import com.healingroom.domain.queue.entity.QueueItem;
+import com.healingroom.domain.queue.entity.QueueSource;
 import com.healingroom.domain.queue.entity.QueueStatus;
 import com.healingroom.domain.queue.entity.QueueVote;
 import com.healingroom.domain.queue.event.QueueChangedEvent;
 import com.healingroom.domain.queue.exception.QueueException;
 import com.healingroom.domain.queue.repository.QueueItemRepository;
 import com.healingroom.domain.queue.repository.QueueVoteRepository;
+import com.healingroom.domain.recommend.client.YouTubeSearchClient;
+import com.healingroom.domain.recommend.dto.VideoSuggestion;
+import com.healingroom.domain.recommend.repository.RecommendRepository;
 import com.healingroom.domain.room.service.RoomService;
 import com.healingroom.domain.theme.entity.ThemeTrack;
 import com.healingroom.domain.theme.service.ThemeService;
@@ -42,7 +46,8 @@ import com.healingroom.domain.theme.service.ThemeService;
  *   <li><b>방장</b>(방에 가장 먼저 들어와 있는 사람)은 모두의 재생을 멈추고/이어 틀고/위치를 옮기고,
  *       아무 곡이나 바로 넘기거나 빼고, 대기열 순서를 바꿀 수 있다.</li>
  *   <li>그 밖의 사람은 방 인원의 50%를 넘게(과반) 투표해야 다른 사람 곡을 넘기거나 뺄 수 있다.</li>
- *   <li>곡이 끝나면 다음 곡, 대기열이 비면 테마 기본 음악을 순서대로 튼다.</li>
+ *   <li>곡이 끝나면 다음 곡. 대기열이 비면 <b>방금 나온 곡과 비슷한 영상을 자동으로 이어 틀고(자동 추천)</b>,
+ *       추천을 못 찾으면 테마 기본 음악을 순서대로 튼다. 자동으로 넣은 곡은 누구나 바로 넘길 수 있다.</li>
  * </ul>
  *
  * <p>같은 방의 변경은 방별 잠금으로 한 번에 하나씩 처리한다. 서버가 한 대일 때를 기준으로 한다.
@@ -56,6 +61,8 @@ public class QueueService {
     private final QueueVoteRepository votes;
     private final RoomService roomService;
     private final ThemeService themeService;
+    private final YouTubeSearchClient youtube;
+    private final RecommendRepository recommendations;
     private final RoomSessionRegistry sessions;
     private final TransactionTemplate tx;
     private final ApplicationEventPublisher events;
@@ -65,7 +72,8 @@ public class QueueService {
     private final Map<String, ReentrantLock> locks = new ConcurrentHashMap<>();
 
     public QueueService(QueueItemRepository items, QueueVoteRepository votes, RoomService roomService,
-                        ThemeService themeService, RoomSessionRegistry sessions, TransactionTemplate tx,
+                        ThemeService themeService, YouTubeSearchClient youtube, RecommendRepository recommendations,
+                        RoomSessionRegistry sessions, TransactionTemplate tx,
                         ApplicationEventPublisher events,
                         @Value("${healing-room.queue.end-grace-seconds}") long endGraceSeconds,
                         @Value("${healing-room.queue.max-size}") int maxQueueSize) {
@@ -73,6 +81,8 @@ public class QueueService {
         this.votes = votes;
         this.roomService = roomService;
         this.themeService = themeService;
+        this.youtube = youtube;
+        this.recommendations = recommendations;
         this.sessions = sessions;
         this.tx = tx;
         this.events = events;
@@ -133,7 +143,7 @@ public class QueueService {
     }
 
     /**
-     * 넘기기/빼기. 내가 신청한 곡이거나 내가 방장이면 바로 처리하고, 아니면 투표로 센다.
+     * 넘기기/빼기. 내가 신청한 곡, 자동으로 넣은 곡(기본 음악·자동 추천)이거나 내가 방장이면 바로 처리하고, 아니면 투표로 센다.
      *
      * @return 곡이 넘겨지거나 빠졌으면 true
      */
@@ -141,7 +151,7 @@ public class QueueService {
         requirePresent(roomId, visitorId);
         return inRoom(roomId, () -> {
             QueueItem item = activeItem(roomId, itemId);
-            if (item.isAddedBy(visitorId) || sessions.isHost(roomId, visitorId)) {
+            if (item.isAddedBy(visitorId) || item.isDefault() || sessions.isHost(roomId, visitorId)) {
                 drop(roomId, item);
                 return true;
             }
@@ -289,7 +299,7 @@ public class QueueService {
         }
     }
 
-    /** 현재 곡을 끝내고 다음 곡을 시작한다. 대기열이 비었으면 기본 음악, 방에 아무도 없으면 멈춘다. */
+    /** 현재 곡을 끝내고 다음 곡을 시작한다. 대기열이 비었으면 자동 추천(없으면 기본 음악), 방에 아무도 없으면 멈춘다. */
     private void advance(String roomId, QueueItem current, QueueStatus endStatus) {
         OffsetDateTime now = OffsetDateTime.now();
         if (current != null) {
@@ -301,7 +311,7 @@ public class QueueService {
             if (sessions.listenerCount(roomId) == 0) {
                 return;
             }
-            next = nextDefault(roomId).orElse(null);
+            next = nextAutoplay(roomId, current).or(() -> nextDefault(roomId)).orElse(null);
             if (next == null) {
                 return;
             }
@@ -310,13 +320,33 @@ public class QueueService {
         next.start(now);
     }
 
+    /**
+     * 자동 추천: 방금 끝난 곡과 비슷한 영상을 고른다. 최근 30곡 안에 나온 곡은 다시 고르지 않는다.
+     * ① YouTube 에서 찾은 비슷한 영상(API 키가 있을 때, 12시간 캐시) ② 그 곡과 함께 신청된 곡 순서로 찾고,
+     * 둘 다 없으면 비어 있다(→ 테마 기본 음악). 방에 처음 들어와 직전 곡이 없을 때도 비어 있다.
+     */
+    private Optional<QueueItem> nextAutoplay(String roomId, QueueItem previous) {
+        if (previous == null) {
+            return Optional.empty();
+        }
+        Set<String> recent = new HashSet<>();
+        items.findTop30ByRoomIdOrderByIdDesc(roomId).forEach(item -> recent.add(item.getYoutubeId()));
+        List<VideoSuggestion> candidates = new ArrayList<>(youtube.similarTo(previous.getYoutubeId(), previous.getTitle()));
+        candidates.addAll(recommendations.requestedTogether(previous.getYoutubeId(), 3, 10));
+        return candidates.stream()
+                .filter(video -> !recent.contains(video.youtubeId()))
+                .findFirst()
+                .map(video -> QueueItem.systemTrack(roomId, video.youtubeId(), video.title(), nextOrder(roomId),
+                        QueueSource.AUTOPLAY));
+    }
+
     /** 테마 기본 음악을 순서대로 돌아가며 고른다. */
     private Optional<QueueItem> nextDefault(String roomId) {
         List<ThemeTrack> list = roomService.themeIdOf(roomId).map(themeService::defaultTracks).orElse(List.of());
         if (list.isEmpty()) {
             return Optional.empty();
         }
-        int index = items.findFirstByRoomIdAndAddedByIsNullOrderByIdDesc(roomId)
+        int index = items.findFirstByRoomIdAndSourceOrderByIdDesc(roomId, QueueSource.DEFAULT)
                 .map(last -> {
                     for (int i = 0; i < list.size(); i++) {
                         if (list.get(i).getYoutubeId().equals(last.getYoutubeId())) {
@@ -327,7 +357,8 @@ public class QueueService {
                 })
                 .orElse(0);
         ThemeTrack track = list.get(index);
-        return Optional.of(QueueItem.defaultTrack(roomId, track.getYoutubeId(), track.getTitle(), nextOrder(roomId)));
+        return Optional.of(QueueItem.systemTrack(roomId, track.getYoutubeId(), track.getTitle(), nextOrder(roomId),
+                QueueSource.DEFAULT));
     }
 
     private long nextOrder(String roomId) {

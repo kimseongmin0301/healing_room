@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>관리자 · 힐링룸</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .admin { max-width: 960px; margin: 0 auto; padding: 40px 20px 80px; }
+    .admin h1 { margin: 0 0 6px; font-size: 26px; }
+    .admin .bar { display: flex; gap: 8px; align-items: center; margin: 18px 0; flex-wrap: wrap; }
+    .admin input { flex: 1; min-width: 220px; padding: 9px 12px; border-radius: 10px; background: rgba(255,255,255,.06); border: 1px solid var(--line); color: var(--text); }
+    .admin table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+    .admin th, .admin td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+    .admin th { color: var(--muted); font-weight: 500; font-size: 12px; }
+    .admin td.mono { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+    .admin section { margin-top: 26px; }
+    .admin h2 { font-size: 17px; margin: 0; }
+    .admin h2 small { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 6px; }
+  </style>
+</head>
+<body>
+  <main class="admin">
+    <h1>관리자</h1>
+    <p class="msg">지금 접속해 있는 모든 방과 사람이에요. 전체 IP가 보이니 화면 공유에 주의하세요.</p>
+    <form id="login" class="bar">
+      <input id="token" type="password" placeholder="관리자 키 (ADMIN_TOKEN)" autocomplete="off">
+      <button class="btn primary">보기</button>
+      <button id="logout" class="btn" type="button">키 지우기</button>
+    </form>
+    <p id="status" class="msg"></p>
+    <div id="rooms"></div>
+  </main>
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>

@@ -30,6 +30,8 @@ public record PlayerState(
      * @param startedAt 재생 시작 시각(ms). 대기 중이면 null
      * @param pausedAt  방장이 멈춘 시각(ms). 재생 중이면 null. 위치 = (pausedAt 또는 지금) - startedAt
      * @param duration  영상 길이(초). 모르거나 라이브면 null
+     * @param source    request 신청곡 / default 테마 기본 음악 / autoplay 자동 추천
+     * @param isDefault 서버가 자동으로 넣은 곡인지 (default·autoplay). 누구나 바로 넘길 수 있다
      */
     public record Track(
             long id,
@@ -38,6 +40,7 @@ public record PlayerState(
             Long startedAt,
             Long pausedAt,
             Integer duration,
+            String source,
             boolean isDefault,
             boolean mine,
             int votes,
@@ -62,7 +65,8 @@ public record PlayerState(
             return new Track(item.getId(), item.getYoutubeId(), item.getTitle(),
                     item.getStartedAt() == null ? null : item.getStartedAt().toInstant().toEpochMilli(),
                     item.getPausedAt() == null ? null : item.getPausedAt().toInstant().toEpochMilli(),
-                    item.getDurationSeconds(), item.isDefault(), item.isAddedBy(visitorId),
+                    item.getDurationSeconds(), item.getSource().name().toLowerCase(), item.isDefault(),
+                    item.isAddedBy(visitorId),
                     votes, visitorId != null && itemVoters.contains(visitorId));
         }
     }

@@ -5,6 +5,7 @@ import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 
+import com.healingroom.domain.presence.handler.ClientIpHandshakeInterceptor;
 import com.healingroom.domain.presence.handler.RoomSocketHandler;
 
 @Configuration
@@ -20,6 +21,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         // 허용 출처를 따로 지정하지 않으면 같은 사이트에서 연 페이지만 접속할 수 있다
-        registry.addHandler(roomSocketHandler, "/ws/rooms/*");
+        registry.addHandler(roomSocketHandler, "/ws/rooms/*")
+                .addInterceptors(new ClientIpHandshakeInterceptor()); // 접속자 IP (nginx 뒤에서는 X-Forwarded-For)
     }
 }

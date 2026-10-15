@@ -7,7 +7,8 @@ import { connectRoom } from './room-socket.js';
 import { showLobby, hideLobby } from './lobby.js';
 import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAudible } from './music.js';
 import { enterMixer, leaveMixer, setAmbientEnabled } from './audio/mixer.js';
-import { initChat, enterChat, leaveChat, receiveChat } from './chat.js';
+import { initChat, enterChat, leaveChat, receiveChat, getNickname } from './chat.js';
+import { renderPeople, resetPeople } from './people.js';
 
 const $ = id => document.getElementById(id);
 const scene = new Scene($('scene'));
@@ -83,8 +84,11 @@ async function enterRoom(id) {
 
   enterMixer(room.id, ambients);
   enterMusic(room.id);
+  resetPeople();
   socket = connectRoom(room.id, {
+    nickname: getNickname,
     onChat: receiveChat,
+    onPresence: renderPeople,
     onState: state => {
       applyState(state);
       setPresence(state.listeners);
@@ -172,6 +176,7 @@ onMusicAudible(audible => {
 // ---------------------------------------------------------------- 시작
 
 $('back').onclick = () => { location.hash = ''; };
+addEventListener('nickname-change', e => socket?.sendNickname(e.detail));
 $('music-sound').onclick = () => { setMusic(!musicOn); store.set('musicOn', musicOn); };
 $('ambient-sound').onclick = () => {
   // 음악 때문에 쉬는 중에 누르면 "다시 켜기"로 본다 (직접 켠 것은 음악이 나와도 유지)

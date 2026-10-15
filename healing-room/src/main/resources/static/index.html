@@ -49,8 +49,16 @@
       <button id="back" class="chip">← 로비</button>
       <h1 id="title"></h1>
       <p id="subtitle"></p>
-      <p class="presence"><span class="dot"></span><span id="presence-text">연결 중…</span>
+      <p class="presence"><span class="dot"></span>
+        <button id="presence-toggle" class="link presence-btn" type="button" aria-expanded="false" aria-controls="people"
+                title="함께 있는 사람 보기"><span id="presence-text">연결 중…</span> ▾</button>
         <span id="host-chip" class="tag mine" hidden title="재생을 멈추거나 옮기고, 아무 곡이나 넘기거나 순서를 바꿀 수 있어요">내가 방장</span></p>
+      <!-- 함께 있는 사람 (닉네임, 가린 IP) -->
+      <div id="people" class="panel people" hidden>
+        <div class="panel-head">함께 있는 사람 <b id="people-count">0</b>명</div>
+        <ol id="people-list" class="people-list"></ol>
+        <p class="hint-text">IP는 앞부분만 보여요</p>
+      </div>
     </div>
 
     <div class="ui top-right">

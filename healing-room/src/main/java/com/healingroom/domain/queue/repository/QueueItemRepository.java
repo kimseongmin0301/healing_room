@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.healingroom.domain.queue.entity.QueueItem;
+import com.healingroom.domain.queue.entity.QueueSource;
 import com.healingroom.domain.queue.entity.QueueStatus;
 
 public interface QueueItemRepository extends JpaRepository<QueueItem, Long> {
@@ -28,8 +29,11 @@ public interface QueueItemRepository extends JpaRepository<QueueItem, Long> {
 
     List<QueueItem> findByStatusAndDurationSecondsNotNull(QueueStatus status);
 
-    /** 기본 음악 순환에 쓰는, 가장 최근에 넣은 기본 음악 */
-    Optional<QueueItem> findFirstByRoomIdAndAddedByIsNullOrderByIdDesc(String roomId);
+    /** 기본 음악 순환에 쓰는, 가장 최근에 넣은 테마 기본 음악 */
+    Optional<QueueItem> findFirstByRoomIdAndSourceOrderByIdDesc(String roomId, QueueSource source);
+
+    /** 최근에 나온 곡들 (자동 추천이 같은 곡을 반복하지 않도록) */
+    List<QueueItem> findTop30ByRoomIdOrderByIdDesc(String roomId);
 
     /** 지난 신청곡 (기본 음악 제외), 최근 것부터 */
     List<QueueItem> findTop30ByRoomIdAndAddedByIsNotNullAndStatusInOrderByIdDesc(String roomId,

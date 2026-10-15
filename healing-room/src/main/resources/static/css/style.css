@@ -97,6 +97,14 @@ body:not(.in-room) canvas { display: none; }
 .top-left p { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
 .presence { display: flex; align-items: center; gap: 6px; margin-top: 8px !important; }
 .presence .tag { margin-left: 6px; }
+.presence-btn { color: inherit; font-size: inherit; text-shadow: inherit; }
+.presence-btn:hover { text-decoration: underline; }
+.people { margin-top: 10px; width: 280px; padding: 10px 12px; box-sizing: border-box; text-shadow: none; }
+.people-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 240px; overflow-y: auto; overscroll-behavior: contain; }
+.people-list li { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.people-list .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.people-list .ip { color: var(--muted); font-size: 11px; font-family: ui-monospace, Consolas, monospace; }
+.people-list .since { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 6px var(--ok); }
 
 .top-right { top: 20px; right: 24px; width: 240px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }

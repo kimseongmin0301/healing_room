@@ -12,7 +12,7 @@ import jakarta.persistence.Table;
 
 /**
  * 방 음악 대기열의 곡 하나 (room_queue_item 테이블).
- * addedBy 가 null 이면 대기열이 비어서 자동으로 넣은 기본 음악이다.
+ * addedBy 가 null 이면 대기열이 비어서 서버가 자동으로 넣은 곡(테마 기본 음악 또는 자동 추천)이다.
  */
 @Entity
 @Table(name = "room_queue_item")
@@ -36,6 +36,9 @@ public class QueueItem {
 
     @Column(nullable = false)
     private QueueStatus status = QueueStatus.QUEUED;
+
+    @Column(nullable = false)
+    private QueueSource source = QueueSource.REQUEST;
 
     @Column(name = "duration_seconds")
     private Integer durationSeconds;
@@ -67,8 +70,12 @@ public class QueueItem {
         this.queueOrder = queueOrder;
     }
 
-    public static QueueItem defaultTrack(String roomId, String youtubeId, String title, long queueOrder) {
-        return new QueueItem(roomId, youtubeId, title, null, queueOrder);
+    /** 서버가 자동으로 넣는 곡 (테마 기본 음악 또는 자동 추천) */
+    public static QueueItem systemTrack(String roomId, String youtubeId, String title, long queueOrder,
+                                       QueueSource source) {
+        QueueItem item = new QueueItem(roomId, youtubeId, title, null, queueOrder);
+        item.source = source;
+        return item;
     }
 
     public void start(OffsetDateTime now) {
@@ -127,7 +134,9 @@ public class QueueItem {
                 && now.isAfter(startedAt.plusSeconds(durationSeconds).plus(grace));
     }
 
+    /** 서버가 자동으로 넣은 곡인지 (기본 음악·자동 추천). 누구나 바로 넘길 수 있고, 신청곡이 들어오면 바로 바뀐다 */
     public boolean isDefault() { return addedBy == null; }
+    public QueueSource getSource() { return source; }
     public boolean isAddedBy(String visitorId) { return addedBy != null && addedBy.equals(visitorId); }
 
     public Long getId() { return id; }

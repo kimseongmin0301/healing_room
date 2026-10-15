@@ -153,9 +153,10 @@ function voteButton(button, track, required) {
   button.hidden = false;
   button.classList.toggle('voted', track.votedByMe);
   const verb = track.id === state.nowPlaying?.id ? '넘기기' : '빼기';
-  if (track.mine || state.hostIsMe) {
+  if (track.mine || track.isDefault || state.hostIsMe) {
     button.textContent = verb;
-    button.title = track.mine ? '내가 신청한 곡은 바로 넘기거나 뺄 수 있어요' : '방장은 바로 넘기거나 뺄 수 있어요';
+    button.title = track.mine ? '내가 신청한 곡은 바로 넘기거나 뺄 수 있어요'
+      : track.isDefault ? '기본 음악·자동 추천은 누구나 바로 넘길 수 있어요' : '방장은 바로 넘기거나 뺄 수 있어요';
   } else {
     button.textContent = `${track.votedByMe ? '투표 취소' : `${verb} 투표`} ${track.votes}/${required}`;
     button.title = `방 인원의 절반을 넘게(${required}명 이상) 투표하면 ${verb === '넘기기' ? '넘어가요' : '빠져요'}`;
@@ -164,6 +165,7 @@ function voteButton(button, track, required) {
 }
 
 function tagFor(track) {
+  if (track.source === 'autoplay') return ['자동 추천', ''];
   if (track.isDefault) return ['기본 음악', ''];
   if (track.mine) return ['내 신청곡', 'mine'];
   return ['신청곡', ''];
@@ -190,7 +192,7 @@ function render() {
   const list = $('queue-list');
   list.replaceChildren();
   if (!state.queue.length) {
-    list.append(emptyRow(np?.isDefault === false ? '다음 곡이 없어요. 끝나면 기본 음악이 나와요' : '신청한 곡이 여기에 쌓여요'));
+    list.append(emptyRow(np?.isDefault === false ? '다음 곡이 없어요. 끝나면 비슷한 곡이 자동으로 이어져요' : '신청한 곡이 여기에 쌓여요'));
   }
   state.queue.forEach((track, i) => {
     const li = document.createElement('li');
@@ -390,11 +392,11 @@ function message(text, isError = false) {
 async function vote(track, { silent = false } = {}) {
   const url = `/api/rooms/${roomId}/queue/${track.id}/vote`;
   try {
-    if (track.votedByMe && !track.mine && !state?.hostIsMe) {
+    if (track.votedByMe && !track.mine && !track.isDefault && !state?.hostIsMe) {
       await api('DELETE', url);
     } else {
       const { applied } = await api('PUT', url);
-      if (applied && !silent) message(track.mine || state?.hostIsMe ? '처리했어요' : '투표가 통과됐어요');
+      if (applied && !silent) message(track.mine || track.isDefault || state?.hostIsMe ? '처리했어요' : '투표가 통과됐어요');
     }
   } catch (e) {
     if (!silent) message(e.message, true);

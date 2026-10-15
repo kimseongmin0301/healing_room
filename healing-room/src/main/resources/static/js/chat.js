@@ -106,6 +106,7 @@ function finishNicknameEdit(e) {
     nickname = value;
     store.set('chatNickname', nickname);
     renderNickname();
+    dispatchEvent(new CustomEvent('nickname-change', { detail: nickname })); // 접속자 목록에도 반영
     message('');
   } else if (e) {
     message('닉네임은 1~12자로 지어 주세요', true);
@@ -116,6 +117,8 @@ function finishNicknameEdit(e) {
 }
 
 // ---------------------------------------------------------------- 외부에서 쓰는 함수
+
+export const getNickname = () => nickname;
 
 export function initChat() {
   renderNickname();

@@ -17,9 +17,10 @@
 - **테마(theme)**는 배경, 효과, 환경음, 기본 음악의 묶음입니다. **방(room)**은 누구나 이름과 테마를 골라 만들 수 있고, 아무도 없는 채로 **30분**이 지나면 닫힙니다. 테마마다 하나씩 있는 **기본 방**(cabin, sea)은 닫히지 않습니다.
 - **방장** = 지금 방에 있는 사람 중 가장 먼저 들어온 사람(보통 방을 만든 사람). 방장이 나가면 그다음에 들어온 사람이 방장이 됩니다. 새로고침처럼 20초 안에 돌아오면 자리를 지켜 줍니다.
 - 같은 방에 있는 사람은 **같은 곡을 같은 위치로** 듣습니다(라디오처럼 동기화). 영상은 직접 조작할 수 없고, **방장만** 모두의 재생을 멈추고/이어 틀고/위치를 옮길 수 있습니다.
-- 누구나 YouTube 링크로 곡을 신청할 수 있습니다(개수 제한 없음). 대기열이 비면 테마 기본 음악이 순서대로 나옵니다.
+- 누구나 YouTube 링크로 곡을 신청할 수 있습니다(개수 제한 없음). 대기열이 비면 **방금 나온 곡과 비슷한 영상이 자동으로 이어지고(자동 추천)**, 추천을 못 찾으면 테마 기본 음악이 나옵니다. 자동으로 넣은 곡(기본 음악·자동 추천)은 누구나 바로 넘길 수 있고, 신청곡이 들어오면 바로 바뀝니다.
 - 넘기기/빼기: **내 신청곡**과 **방장**은 바로, 그 밖에는 **방 인원의 50%를 넘는(과반) 투표**가 필요합니다. 대기열 순서는 방장만 바꿉니다.
 - 곡 추천: 내 신청 기록(브라우저), YouTube에서 찾은 비슷한 영상(API 키 필요), 함께 신청된 곡, 테마 인기곡.
+- **접속자 목록**: 방 사람 수와 닉네임, **앞부분만 보이는 IP**(`203.0.*.*`)를 모두에게 보여줍니다. 전체 IP 는 관리자 화면(`/admin.html`, `ADMIN_TOKEN`)에서만 봅니다.
 - **방 채팅**: 닉네임은 자동으로 붙고("졸린 고양이" 같은) 바꿀 수 있습니다(브라우저에 저장). 메시지는 Redis에 방마다 최근 100개를 보관하고, 사용자 방은 닫힐 때 지우며 기본 방은 최근 24시간만 보여줍니다.
 
 ## 2. 기술 스택
@@ -68,7 +69,7 @@
       │  │  ├─ controller/          QueueController          /api/rooms/{roomId}/queue/**
       │  │  ├─ service/             QueueService(핵심 로직), VotePolicy(과반 규칙)
       │  │  ├─ repository/          QueueItemRepository, QueueVoteRepository
-      │  │  ├─ entity/              QueueItem(멈춤·위치·순서 포함), QueueVote, QueueStatus
+      │  │  ├─ entity/              QueueItem(멈춤·위치·순서 포함), QueueVote, QueueStatus, QueueSource(request/default/autoplay)
       │  │  ├─ dto/                 PlayerState, QueueHistoryResponse, QueueAdd*, DurationRequest, PlaybackRequest, MoveRequest
       │  │  ├─ event/               QueueChangedEvent (상태가 바뀌면 발행 → WebSocket 으로 전송)
       │  │  ├─ exception/           QueueException
@@ -87,8 +88,16 @@
       │  │  ├─ repository/          RecommendRepository (JdbcClient 집계 SQL: 테마 인기곡, 함께 신청된 곡)
       │  │  ├─ client/              YouTubeSearchClient (YouTube Data API 검색, 12시간 캐시)
       │  │  └─ dto/                 RecommendationResponse, VideoSuggestion
-      │  └─ presence/               ← 방 접속(누가 어느 방에 있는지, 방장)
-      │     ├─ handler/             RoomSocketHandler (WebSocket 연결/해제, 상태 전송)
+      │  ├─ admin/                  ← 관리자 (ADMIN_TOKEN 으로 보호)
+      │  │  ├─ controller/          AdminController          GET /api/admin/presence
+      │  │  ├─ service/             AdminService (키 확인, 모든 방 접속자·전체 IP)
+      │  │  ├─ dto/                 AdminPresenceResponse
+      │  │  └─ exception/           AdminException (키 없음 404, 틀림 401)
+      │  └─ presence/               ← 방 접속(누가 어느 방에 있는지, 방장, 닉네임, IP)
+      │     ├─ handler/             RoomSocketHandler (WebSocket 연결/해제, 상태·접속자 전송, 닉네임 변경 수신),
+      │     │                       ClientIpHandshakeInterceptor (nginx 뒤에서 X-Forwarded-For 로 실제 IP)
+      │     ├─ dto/                 PresencePush (type=presence, 가린 IP)
+      │     ├─ util/                IpMask (203.0.*.*)
       │     └─ service/             RoomSessionRegistry (방별 접속자·들어온 순서·방장, 메모리), RoomBroadcaster (방 사람들에게 각자 기준으로 전송)
       └─ global/
          ├─ config/                 WebSocketConfig, RedisConfig (채팅 pub/sub 구독)
@@ -105,6 +114,8 @@
             ├─ room-socket.js       WebSocket 연결·재연결
             ├─ music.js             YouTube 플레이어 동기화, 방장 조작, 대기열/지난 신청곡/추천 탭, 내 신청 기록, 창 최소화·최대화
             ├─ chat.js              채팅 창 (지난 대화, 보내기, 실시간 수신, 닉네임, 접기·안 읽은 수)
+            ├─ people.js            함께 있는 사람 목록 (닉네임, 가린 IP, 방장 👑)
+            ├─ admin.js             관리자 화면 (static/admin.html)
             ├─ scene.js             캔버스 공통 도구 (cover 맞춤, 좌표 변환, wobble, glow, 배경 영상)
             ├─ audio/sounds.js      환경음 합성 (fire, wind, rain, waves, crickets)
             ├─ audio/mixer.js       환경음 믹서 UI
@@ -152,6 +163,7 @@ cd healing-room
 | `V2__seed_room.sql` | 기본 방 2개 (cabin, sea) | ✅ |
 | `V3__ambient_playlist_video.sql` | 배경 영상 컬럼, room_ambient, room_playlist(기본 음악), room_queue_item, room_queue_vote | ✅ |
 | `V4__replace_default_tracks.sql` | 기본 음악 교체 (임베드 가능한 영상으로) | ✅ |
+| `V6__queue_item_source.sql` | 대기열에 source(request/default/autoplay) 추가 | ✅ |
 | `V5__theme_and_rooms.sql` | room→theme, room_ambient→theme_ambient, room_playlist→theme_track 로 이름 변경. 새 room(사용자 방) 테이블, 기본 방 cabin·sea 생성, 대기열에 paused_at·queue_order 추가 | ✅ |
 
 > V1~V4 파일 안의 `room` 은 지금의 `theme` 입니다(V5 에서 이름이 바뀜).
@@ -191,6 +203,7 @@ Redis는 **다른 서비스(other-service)와 같은 서버를 공유**합니다
 | `REDIS_HOST`, `REDIS_PORT` | Redis 접속 정보 |
 | `REDIS_USERNAME`, `REDIS_PASSWORD` | 전용 계정 `healing_room` (6절) |
 | `REDIS_DATABASE` | Redis DB 번호 (1) |
+| `ADMIN_TOKEN` | 관리자 화면(`/admin.html`) 키. 비워 두면 관리자 기능이 꺼짐(404). 전체 IP 가 보이므로 길고 무작위로 |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 키. 추천의 "비슷한 영상"에만 쓰며, 비워 두면 그 기능만 꺼짐. 검색 1번 = 하루 할당량 10,000 중 100 |
 
 `.env`는 절대 커밋하지 마세요. 새 키를 추가하면 `.env.example`도 함께 고치세요.
@@ -217,7 +230,8 @@ Redis는 **다른 서비스(other-service)와 같은 서버를 공유**합니다
 | GET | `/api/rooms/{roomId}/recommendations` | 지금 곡 기준 추천 `{ basedOn, similar, similarAvailable, together, popular }` |
 | GET | `/api/rooms/{roomId}/chat` | 지난 대화 (오래된 것부터, 최대 100개) `[{ id, nickname, text, sentAt, mine }]` |
 | POST | `/api/rooms/{roomId}/chat` | 채팅 보내기 `{ "nickname", "text" }` → 201. 10초에 6개 넘으면 429, Redis 장애 시 503 |
-| WS | `/ws/rooms/{roomId}?visitorId={uuid}` | 연결돼 있는 동안 "방에 있음". 서버가 `PlayerState`(type=`state`)와 새 채팅(type=`chat`)을 보냄. 닫힌 방이면 연결 거부 |
+| GET | `/api/admin/presence` | **관리자** (`X-Admin-Token`) 모든 방 접속자: 닉네임, 전체 IP, 방문자 id 앞 8자리, 들어온 시각 |
+| WS | `/ws/rooms/{roomId}?visitorId={uuid}&nickname={닉네임}` | 연결돼 있는 동안 "방에 있음". 서버 → `state`(음악), `chat`(새 채팅), `presence`(접속자 목록). 브라우저 → `{"type":"nickname","nickname":"…"}`(닉네임 변경). 닫힌 방이면 연결 거부 |
 
 ### 함께 듣는 음악 동작 (QueueService)
 - 곡 신청 시 oEmbed로 영상 확인·제목 조회 → 대기열 맨 뒤. 기본 음악이 나오는 중이면 바로 신청곡으로 넘어갑니다.
@@ -225,6 +239,8 @@ Redis는 **다른 서비스(other-service)와 같은 서버를 공유**합니다
 - 투표 통과 기준: `VotePolicy.required(n) = n / 2 + 1` (과반). **방을 떠난 사람의 표는 세지 않고**, 사람이 들어오거나 나가면 다시 판정합니다.
 - 방별 `ReentrantLock` + 트랜잭션으로 한 번에 하나씩 처리하고, 끝나면 `QueueChangedEvent` → `RoomSocketHandler`가 방 전체에 각자 기준의 상태를 보냅니다. **다른 방문자의 id는 절대 응답에 넣지 않습니다.**
 - 브라우저에서 영상이 재생 불가(YouTube 오류 100/101/150)면 자동으로 넘기기에 한 표를 던집니다.
+- **자동 추천**(`nextAutoplay`): 대기열이 비어 다음 곡이 필요하면, 방금 끝난 곡을 기준으로 ① YouTube 비슷한 영상 ② 함께 신청된 곡 순서로 후보를 찾고, 최근 30곡에 나온 곡은 빼고 첫 번째를 `source=autoplay` 로 넣습니다. 못 찾으면 테마 기본 음악(`source=default`). YouTube 검색은 곡마다 1번(12시간 캐시)이라 자동 추천이 이어질수록 하루 할당량을 씁니다(10,000 / 100 = 하루 약 100곡). 할당량이 다 떨어지면 함께 신청된 곡 → 기본 음악으로 넘어갑니다.
+- 자동으로 넣은 곡(`added_by IS NULL`: default·autoplay)은 투표 없이 누구나 바로 넘기고, 신청곡이 들어오면 바로 신청곡으로 바뀝니다.
 - 방장 조작: 재생 위치 = (`paused_at` 또는 지금) − `started_at`. 멈춤은 `paused_at` 기록, 이어서 재생은 멈춰 있던 시간만큼 `started_at`을 뒤로 미룸, 위치 이동은 `started_at`을 다시 계산합니다. 멈춘 곡은 끝나지 않습니다.
 - 대기열 순서는 `queue_order`(작을수록 먼저). 새 곡은 방의 최댓값 + 1, 방장이 옮기면 이웃과 값을 맞바꿉니다.
 
@@ -233,6 +249,12 @@ Redis는 **다른 서비스(other-service)와 같은 서버를 공유**합니다
 - **비슷한 영상**: YouTube Data API `search`로 지금 곡 제목을 검색합니다(YouTube가 "연관 영상" 검색을 없애서 제목 검색 방식). 조건: `videoEmbeddable=true`, `videoCategoryId=10`(음악), 라이브·예정 방송(`liveBroadcastContent != none`) 제외 — 라이브는 다른 사이트에서 재생이 막히는 경우가 많아서입니다. 같은 곡은 12시간 캐시합니다. 키가 없거나 할당량 초과·오류면 빈 목록이고 나머지 추천은 그대로 나옵니다.
 - **함께 신청된 곡**: 같은 방에서 앞뒤 3시간 안에 함께 신청된 곡 (함께 신청된 방이 많은 순).
 - **테마 인기곡**: 같은 테마의 방들에서 최근 30일 동안 많이 신청된 곡. 기본 음악은 세지 않습니다.
+
+### 접속자 목록과 IP (presence)
+- WebSocket 연결 때 `ClientIpHandshakeInterceptor` 가 IP 를 세션에 남깁니다. 요청이 루프백(nginx)에서 왔을 때만 `X-Forwarded-For` 첫 주소를 믿고, 밖에서 직접 온 요청의 헤더는 무시합니다(위조 방지).
+- 닉네임은 연결 주소(`nickname=`)로 받고, 바꾸면 WebSocket 메시지로 받습니다(`ChatPolicy.cleanNickname` 으로 정리).
+- 사람이 들어오고 나가거나 닉네임을 바꾸면 `PresencePush` 를 방 전체에 보냅니다. **방문자 id 와 전체 IP 는 절대 내보내지 않고** IP 는 `IpMask` 로 앞부분만 보냅니다. 전체 IP 는 관리자 API 에서만.
+- IP 는 개인정보이므로 저장(DB·Redis·로그)하지 않고 서버 메모리에만, 접속해 있는 동안만 둡니다.
 
 ## 9. 프론트엔드 규칙
 
@@ -297,6 +319,8 @@ Redis는 **다른 서비스(other-service)와 같은 서버를 공유**합니다
 - [x] 방 만들기 (이름 + 테마), 방장(재생 조작·순서 바꾸기), 빈 방 30분 뒤 닫기
 - [x] 곡 추천 (내 신청 기록, 비슷한 영상, 함께 신청된 곡, 테마 인기곡)
 - [x] 방 채팅 (Redis 보관·도배 방지·pub/sub, 자동 닉네임)
+- [x] 접속자 목록 (닉네임, 가린 IP), 관리자 화면 (전체 IP)
+- [x] 자동 추천 재생 (신청곡이 없으면 비슷한 영상을 이어서)
 - [ ] 테마 추가: 밤하늘, 숲, 모래사장, 클럽 (배경 이미지/영상 필요)
 - [ ] 클럽 방 비트 효과
 - 로그인 기능은 **만들지 않습니다** (익명 서비스).

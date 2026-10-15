@@ -61,6 +61,31 @@ class RoomSessionRegistryTests {
     }
 
     @Test
+    void participantsGroupTabsAndKeepNicknameAndIp() {
+        registry.add("room", "A", session(), "203.0.113.10", "졸린 고양이");
+        registry.add("room", "A", session(), "203.0.113.10", null); // 같은 사람의 두 번째 탭
+        registry.add("room", "B", session(), "121.134.5.6", "따뜻한 장작");
+        registry.setNickname("room", "B", "느긋한 수달");
+
+        var people = registry.participants("room");
+        assertThat(people).extracting(RoomSessionRegistry.Participant::nickname).containsExactly("졸린 고양이", "느긋한 수달");
+        assertThat(people.get(0).tabs()).isEqualTo(2);
+        assertThat(people.get(1).ip()).isEqualTo("121.134.5.6");
+    }
+
+    @Test
+    void presencePushHidesVisitorIdAndFullIp() {
+        registry.add("room", "A", session(), "203.0.113.10", "졸린 고양이");
+        registry.add("room", "B", session(), "121.134.5.6", "따뜻한 장작");
+
+        var push = com.healingroom.domain.presence.dto.PresencePush.of(registry.participants("room"), "A", "B");
+        assertThat(push.count()).isEqualTo(2);
+        assertThat(push.people().get(0).host()).isTrue();
+        assertThat(push.people().get(0).ip()).isEqualTo("203.0.*.*");
+        assertThat(push.people().get(1).me()).isTrue();
+    }
+
+    @Test
     void emptyRoomHasNoHost() {
         assertThat(registry.host("room")).isEmpty();
         assertThat(registry.isHost("room", "A")).isFalse();
