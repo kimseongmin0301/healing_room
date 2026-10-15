@@ -1,4 +1,4 @@
-// 함께 있는 사람 목록: 이름 옆 "N명이 함께 쉬는 중"을 누르면 펼쳐진다. IP 는 서버가 앞부분만 보내준다
+// 함께 있는 사람 목록: 방 이름 아래 "👥 함께 있는 사람" 버튼을 누르면 펼쳐진다. IP 는 서버가 앞부분만 보내준다
 const $ = id => document.getElementById(id);
 
 function since(ms) {
@@ -18,6 +18,7 @@ $('presence-toggle').addEventListener('click', () => toggle());
 /** 서버가 보낸 접속자 목록 (type=presence) */
 export function renderPeople({ count, people }) {
   $('people-count').textContent = count;
+  $('people-chip-count').textContent = count;
   $('people-list').replaceChildren(...people.map(person => {
     const li = document.createElement('li');
     const name = Object.assign(document.createElement('span'), {
@@ -36,5 +37,6 @@ export function renderPeople({ count, people }) {
 export function resetPeople() {
   $('people-list').replaceChildren();
   $('people-count').textContent = '0';
+  $('people-chip-count').textContent = '0';
   toggle(false);
 }
