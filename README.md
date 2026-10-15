@@ -199,6 +199,22 @@ cd healing_room/healing-room
 
 ---
 
+### 7. 운영 서버 배포
+`deploy/`에 systemd 서비스, nginx 설정, 스크립트가 있어요. 서버 경로·도메인·계정은 이 프로젝트 서버 기준이니, 다른 서버라면 파일 안의 값을 바꿔서 쓰세요.
+
+| 파일 | 역할 |
+|---|---|
+| `install-root.sh` | **처음 한 번 (sudo)**: 서비스 등록, nginx 사이트 추가, HTTPS 인증서 발급. 여러 번 실행해도 안전하고, nginx 검사에 실패하면 되돌려요 |
+| `deploy.sh` | **새 버전 배포**: 테스트 → 빌드 → 업로드 → 재시작 → 확인. `rollback`으로 이전 버전으로 되돌리기 |
+| `healing-room.service` | systemd 서비스 정의 |
+| `nginx-http.conf` / `nginx-https.conf` | 인증서 발급 전 / 후 nginx 설정 (WebSocket 포함) |
+
+```bash
+bash deploy/deploy.sh
+```
+
+---
+
 ## 📁 프로젝트 구조
 
 백엔드는 **도메인마다 controller / service / repository / entity / dto**를 두는 구조예요. 자세한 설명은 [AGENTS.md](AGENTS.md)에 있어요.
@@ -206,6 +222,7 @@ cd healing_room/healing-room
 ```
 healing_room/
 ├─ README.md · AGENTS.md · CLAUDE.md
+├─ deploy/                          운영 서버 배포 (systemd, nginx, 스크립트)
 ├─ docs/screenshots/                README 화면 캡처
 ├─ design/                          디자인 시안(SVG·PNG)과 초기 프로토타입
 └─ healing-room/                    Spring Boot 앱 (Gradle 프로젝트)

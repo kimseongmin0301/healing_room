@@ -42,6 +42,7 @@
 /                                   ← 저장소 루트
 ├─ AGENTS.md / CLAUDE.md / README.md
 ├─ docs/screenshots/               ← README 화면 캡처 (화면이 바뀌면 다시 찍기)
+├─ deploy/                          ← 운영 서버 배포 (systemd, nginx, 설치·배포 스크립트). 12절
 ├─ design/                          ← 디자인 시안(SVG/PNG), 초기 프로토타입(live/)
 └─ healing-room/                    ← Spring Boot 앱 (Gradle 프로젝트 루트)
    ├─ .env.example                  ← 환경변수 형식 (.env 는 git 제외)
@@ -115,7 +116,7 @@
 **새 도메인을 추가할 때**는 `domain/{이름}/` 아래에 필요한 계층(controller, service, repository, entity, dto)만 만드세요.
 다른 도메인의 entity 를 컨트롤러에서 직접 쓰지 말고 service 를 통해 접근합니다.
 
-## 4. 실행 · 테스트 명령
+## 4. 실행 · 테스트 명령 (로컬)
 
 모든 Gradle 명령은 `healing-room/` 폴더에서 실행합니다.
 
@@ -266,7 +267,25 @@ Redis는 **다른 서비스(other-service)와 같은 서버를 공유**합니다
 - 주변 코드의 스타일과 주석 밀도를 따르세요.
 - 기능을 추가하면 `@WebMvcTest` + `@MockitoBean` 컨트롤러 테스트나 단위 테스트를 함께 작성하세요. 이 테스트들은 DB 없이 돌아갑니다.
 
-## 11. 로드맵 / 진행 상황
+## 11. 운영 서버 배포
+
+- 주소: **https://healing.kimseongmin.co.kr** (nginx → `127.0.0.1:18280`). SSH 별칭 `ai-server`(`~/.ssh/config`).
+- DB·Redis 가 같은 서버에 있어서 운영 `.env` 는 `127.0.0.1` 로 접속합니다.
+- 서버 폴더 (other-app 와 같은 구조)
+  ```
+  ~/healing-room/
+  ├─ releases/{날짜}-{커밋}/healing-room.jar   최근 5개 보관
+  ├─ current → releases/…                     실행 중인 버전
+  ├─ shared/.env                              운영 설정 (권한 600, server.address=127.0.0.1)
+  └─ deploy/                                  저장소 deploy/ 복사본
+  ```
+- 실행: systemd `healing-room` (Java: `~/apps/jre17`), 로그는 `journalctl -u healing-room -f` (seongmin 은 adm 그룹이라 sudo 없이 볼 수 있음)
+- **새 버전 배포**: 커밋한 뒤 저장소 루트에서 `bash deploy/deploy.sh` (테스트·빌드 → 업로드 → 재시작 → 확인). 되돌리기는 `bash deploy/deploy.sh rollback`.
+- **sudo 가 필요한 설치**(서비스 등록, nginx, 인증서)는 `deploy/install-root.sh` 를 사람이 직접 실행합니다. AI 는 sudo 비밀번호를 다루지 않습니다. 재시작만 `/etc/sudoers.d/healing-room` 으로 비밀번호 없이 허용합니다.
+- nginx 는 **`sites-available/healing.kimseongmin.co.kr` 파일만** 이 앱 것입니다. 기존 `kimseongmin.co.kr` 설정 파일은 다른 서비스(메인, RAG, other-app)가 쓰므로 절대 수정하지 마세요. 적용 전에는 항상 `nginx -t`.
+- 운영 서버에 붙은 앱과 **같은 DB 를 쓰는 서버를 로컬에서 동시에 띄우지 마세요**(대기열 스케줄러가 두 번 돕니다). 로컬 개발용 DB 를 따로 두는 게 좋습니다.
+
+## 12. 로드맵 / 진행 상황
 
 - [x] 방 2개 (불멍, 바다멍), 실사 배경 + 캔버스 효과
 - [x] 방 정보를 PostgreSQL에서 읽기

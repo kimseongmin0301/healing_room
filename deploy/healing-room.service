@@ -1,0 +1,23 @@
+# /etc/systemd/system/healing-room.service
+# 힐링룸 앱. 설정(.env)은 WorkingDirectory 에 두고, jar 는 current 링크가 가리키는 버전을 실행한다.
+[Unit]
+Description=Healing Room (Spring Boot)
+After=network-online.target postgresql@16-main.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=seongmin
+Group=seongmin
+WorkingDirectory=/home/seongmin/healing-room/shared
+ExecStart=/home/seongmin/apps/jre17/bin/java -Xms128m -Xmx512m -jar /home/seongmin/healing-room/current/healing-room.jar
+# Java 는 SIGTERM 으로 끝나면 143 을 돌려준다 (정상 종료로 본다)
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
