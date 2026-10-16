@@ -66,7 +66,7 @@ async function enterRoom(id) {
     detail = await api('GET', `/api/rooms/${encodeURIComponent(id)}`);
   } catch {
     lobbyMessage = '닫혔거나 없는 방이에요. 다른 방에 들어가거나 새로 만들어 보세요.';
-    location.hash = ''; // 없거나 닫힌 방이면 로비로
+    go('/', { replace: true }); // 없거나 닫힌 방이면 로비로
     return;
   }
   const { room, ambients } = detail;
@@ -136,13 +136,25 @@ function showLobbyView() {
     // 카드를 누른 순간(사용자 클릭)이라 브라우저가 소리를 허용한다. 마지막으로 고른 켜짐/꺼짐을 따른다
     setMusic(store.get('musicOn', true));
     setAmbient(store.get('ambientOn', true));
-    location.hash = id;
+    go(`/${id}`);
   }, lobbyMessage);
   lobbyMessage = '';
 }
 
+// ---------------------------------------------------------------- 주소: 방은 /{방id} (예: /cafe). # 없이 history API 로 옮긴다
+
+/** 주소를 바꾸고 그 화면을 보여준다 (새로고침 없이) */
+function go(path, { replace = false } = {}) {
+  if (location.pathname !== path) history[replace ? 'replaceState' : 'pushState'](null, '', path);
+  route();
+}
+
 function route() {
-  const id = decodeURIComponent(location.hash.slice(1));
+  // 예전 주소(/#cafe)로 들어오면 새 주소(/cafe)로 바꾼다
+  if (location.hash.length > 1) {
+    history.replaceState(null, '', `/${decodeURIComponent(location.hash.slice(1))}`);
+  }
+  const id = decodeURIComponent(location.pathname.slice(1));
   if (id) enterRoom(id); else showLobbyView();
 }
 
@@ -199,7 +211,7 @@ onMusicAudible(audible => {
 
 // ---------------------------------------------------------------- 시작
 
-$('back').onclick = () => { location.hash = ''; };
+$('back').onclick = () => go('/');
 $('reset-room').onclick = async () => {
   if (!current || !confirm('이 방의 지난 신청곡, 투표, 채팅을 모두 지울까요?\n지금 나오는 곡도 멈추고 기본 음악부터 다시 시작해요.')) return;
   try {
@@ -231,7 +243,7 @@ $('fx').onclick = e => {
   e.target.textContent = scene.fxOn ? '효과 끄기' : '효과 켜기';
 };
 scene.canvas.onclick = e => current?.effect.click(...scene.toUV(e.clientX, e.clientY));
-addEventListener('hashchange', route);
+addEventListener('popstate', route); // 뒤로·앞으로 가기
 
 initMusic();
 initChat();

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>잠깐 문제가 생겼어요 · 힐링룸</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <!-- 오류 화면 (스프링이 상태 코드에 맞춰 보여준다: error/404.html, 4xx.html, 5xx.html). 5초 뒤 첫 화면으로 -->
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;
+      background: #0e0d12; color: #f3efe8; font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; text-align: center; }
+    img { width: 140px; height: auto; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, .4)); }
+    h1 { margin: 18px 0 8px; font-size: 26px; }
+    p { margin: 0 0 22px; color: #b8b2a8; line-height: 1.7; }
+    a { display: inline-block; padding: 12px 24px; border-radius: 999px; background: #f0a35e; color: #1a1410; font-weight: 700; text-decoration: none; }
+    small { display: block; margin-top: 14px; color: #8a847b; }
+  </style>
+</head>
+<body>
+  <main>
+    <img src="/images/mascot.webp" alt="" width="140" height="140">
+    <h1>잠깐 문제가 생겼어요</h1>
+    <p>서버에 문제가 생겼어요. 잠시 후 다시 시도해 주세요.<br>졸린 고양이가 처음 화면으로 안내해 드릴게요.</p>
+    <a href="/">처음으로</a>
+    <small><span id="sec">5</span>초 뒤 처음 화면으로 이동해요</small>
+  </main>
+  <script>
+    let left = 5;
+    const timer = setInterval(() => {
+      left -= 1;
+      document.getElementById('sec').textContent = left;
+      if (left <= 0) { clearInterval(timer); location.replace('/'); }
+    }, 1000);
+  </script>
+</body>
+</html>

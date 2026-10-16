@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -57,12 +58,25 @@ public class RoomService {
         this.maxOpenPerVisitor = maxOpenPerVisitor;
     }
 
-    /** 열려 있는 방 목록 + 방마다 지금 있는 사람 수 (로비) */
+    /** 열려 있는 모든 방 + 방마다 지금 있는 사람 수 (관리자 등) */
     public List<RoomResponse> findOpen() {
+        return openRooms(room -> true);
+    }
+
+    /**
+     * 로비에 보일 방: 늘 보이는 방(featured: 불멍·바다멍), 사용자가 만든 방, 사람이 있는 기본 방.
+     * 나머지 기본 방은 로비가 붐비지 않게 숨긴다 (주소 /{id} 로는 언제든 들어간다)
+     */
+    public List<RoomResponse> findLobby() {
+        return openRooms(room -> room.isFeatured() || !room.isDefault() || sessions.listenerCount(room.getId()) > 0);
+    }
+
+    private List<RoomResponse> openRooms(Predicate<Room> show) {
         Map<String, ThemeResponse> themes = themeService.findAll().stream()
                 .collect(Collectors.toMap(ThemeResponse::id, Function.identity()));
         return rooms.findByClosedAtIsNullOrderByIsDefaultDescCreatedAtAsc().stream()
                 .filter(room -> themes.containsKey(room.getThemeId()))
+                .filter(show)
                 .map(room -> RoomResponse.of(room, themes.get(room.getThemeId()), sessions.listenerCount(room.getId())))
                 .toList();
     }

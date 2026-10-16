@@ -5,7 +5,7 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /ws/
-Disallow: /admin.html
+Disallow: /admin
 
 # AI 검색·답변 서비스 (ChatGPT, Claude, Perplexity, Google AI 등) 도 허용
 User-agent: GPTBot
@@ -20,6 +20,6 @@ User-agent: Yeti
 Allow: /
 Disallow: /api/
 Disallow: /ws/
-Disallow: /admin.html
+Disallow: /admin
 
 Sitemap: https://healing.kimseongmin.co.kr/sitemap.xml

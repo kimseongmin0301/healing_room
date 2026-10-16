@@ -3,12 +3,12 @@
 
   python scripts/seo_pages.py
 
-만드는 것 (healing-room/src/main/resources/static/ 아래)
-  themes/{방id}.html   테마별 소개 페이지 10개 (검색어에 맞춘 제목·설명·자주 묻는 질문·바로 들어가기)
-  themes/index.html    테마 모음
-  about.html           서비스 소개 (만든 사람, 작동 원리, 개인정보)
-  images/og/{방id}.jpg 테마별 링크 미리보기 이미지 (1200×630)
-  sitemap.xml          위 페이지 전부
+만드는 것 (healing-room/src/main/resources/ 아래. 주소는 .html 없이 SiteController 가 보여준다)
+  pages/themes/{방id}.html   → /themes/{방id}  테마별 소개 페이지 10개 (검색어에 맞춘 제목·설명·자주 묻는 질문·바로 들어가기)
+  pages/themes/index.html    → /themes         테마 모음
+  pages/about.html           → /about          서비스 소개 (만든 사람, 작동 원리, 개인정보)
+  static/images/og/{방id}.jpg                  테마별 링크 미리보기 이미지 (1200×630)
+  static/sitemap.xml                           위 페이지 전부
 
 테마 내용을 바꾸려면 아래 THEMES 를 고치고 다시 실행한 뒤 결과 파일을 함께 커밋한다.
 환경음·기본 음악은 DB(theme_ambient, theme_track) 내용을 사람이 읽기 좋게 옮겨 둔 것이다.
@@ -20,13 +20,15 @@ from datetime import date
 
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = os.path.join(os.path.dirname(__file__), '..', 'healing-room', 'src', 'main', 'resources', 'static')
+RESOURCES = os.path.join(os.path.dirname(__file__), '..', 'healing-room', 'src', 'main', 'resources')
+ROOT = os.path.join(RESOURCES, 'static')   # 정적 파일 (이미지, sitemap)
+PAGES = os.path.join(RESOURCES, 'pages')   # 소개 페이지 (SiteController 가 .html 없는 주소로 보여줌)
 SITE = 'https://healing.kimseongmin.co.kr'
 TODAY = date.today().isoformat()
 FONT_BOLD = 'C:/Windows/Fonts/malgunbd.ttf'
 FONT = 'C:/Windows/Fonts/malgun.ttf'
 
-# room: 기본 방 id(주소 #id, 페이지 이름) / image: 배경 파일 이름
+# room: 기본 방 id (방 주소 /{id}, 소개 페이지 /themes/{id}) / image: 배경 파일 이름
 THEMES = [
     dict(room='cabin', image='cabin', name='불멍', title='불멍 · 겨울 오두막',
          keyword='불멍 사이트 · 모닥불·장작 타는 소리',
@@ -170,10 +172,10 @@ def page(title, description, path, image, body, ld, extra_head=''):
 <body>
   <!-- 이 파일은 scripts/seo_pages.py 로 만든다. 직접 고치지 말고 스크립트를 고친 뒤 다시 실행한다 -->
   <header class="top"><a class="logo" href="/"><img src="/images/mascot.webp" alt="" width="36" height="36">힐링룸</a>
-    <nav><a href="/themes/">테마</a><a href="/about.html">소개</a></nav></header>
+    <nav><a href="/themes">테마</a><a href="/about">소개</a></nav></header>
 {body}
   <footer class="foot">
-    <p><a href="/">힐링룸</a> · <a href="/themes/">테마 모음</a> · <a href="/about.html">서비스 소개</a> · <a href="https://github.com/kimseongmin0301/healing_room">GitHub</a></p>
+    <p><a href="/">힐링룸</a> · <a href="/themes">테마 모음</a> · <a href="/about">서비스 소개</a> · <a href="https://github.com/kimseongmin0301/healing_room">GitHub</a></p>
     <p>최종 수정 {TODAY}</p>
   </footer>
 </body>
@@ -224,18 +226,18 @@ def og_image(t):
 
 
 def theme_page(t):
-    path = f'/themes/{t["room"]}.html'
+    path = f'/themes/{t["room"]}'
     faq = t['faq'] + COMMON_FAQ
     title = f'{t["keyword"]} | 힐링룸'
     description = (t['lead'][:150]).rstrip() + ('…' if len(t['lead']) > 150 else '')
-    others = ''.join(f'<li><a href="/themes/{o["room"]}.html">{esc(o["name"])}</a></li>' for o in THEMES if o is not t)
+    others = ''.join(f'<li><a href="/themes/{o["room"]}">{esc(o["name"])}</a></li>' for o in THEMES if o is not t)
     body = f'''  <main>
     <section class="hero" style="background-image: url('/images/{t["image"]}.webp')">
       <div class="hero-in">
         <p class="eyebrow">힐링룸 테마</p>
         <h1>{esc(t["title"])}</h1>
         <p class="lead">{esc(t["what"])} {esc(t["lead"])}</p>
-        <a class="cta" href="/#{t["room"]}">지금 {esc(t["name"])} 방 들어가기 →</a>
+        <a class="cta" href="/{t["room"]}">지금 {esc(t["name"])} 방 들어가기 →</a>
         <p class="note">무료 · 로그인 없음 · 휴대폰에서도 돼요</p>
       </div>
     </section>
@@ -261,7 +263,7 @@ def theme_page(t):
       </section>
       <section class="cta-box">
         <p>{esc(t["name"])} 방은 항상 열려 있어요.</p>
-        <a class="cta" href="/#{t["room"]}">{esc(t["name"])} 방 들어가기 →</a>
+        <a class="cta" href="/{t["room"]}">{esc(t["name"])} 방 들어가기 →</a>
       </section>
       <section>
         <h2>다른 테마</h2>
@@ -274,18 +276,18 @@ def theme_page(t):
          'inLanguage': 'ko-KR', 'dateModified': TODAY, 'isPartOf': {'@id': f'{SITE}/#website'},
          'primaryImageOfPage': f'{SITE}/images/og/{t["room"]}.jpg',
          'about': {'@type': 'Thing', 'name': t['name'], 'description': t['what']},
-         'potentialAction': {'@type': 'ViewAction', 'name': f'{t["name"]} 방 들어가기', 'target': f'{SITE}/#{t["room"]}'}},
-        crumbs(('힐링룸', '/'), ('테마', '/themes/'), (t['name'], path)),
+         'potentialAction': {'@type': 'ViewAction', 'name': f'{t["name"]} 방 들어가기', 'target': f'{SITE}/{t["room"]}'}},
+        crumbs(('힐링룸', '/'), ('테마', '/themes'), (t['name'], path)),
         faq_ld(faq)]}
-    write(path, page(title, description, path, f'/images/og/{t["room"]}.jpg', body, ld))
+    write_page(f'themes/{t["room"]}.html', page(title, description, path, f'/images/og/{t["room"]}.jpg', body, ld))
     og_image(t)
 
 
 def themes_index():
-    path = '/themes/'
+    path = '/themes'
     title = '힐링룸 테마 모음 · 불멍 바다멍 비멍 카페멍 우주멍'
     description = '불멍, 바다멍, 숲멍, 비멍, 카페멍, 눈멍, 노을멍, 우주멍, 별멍, 라운지 클럽. 힐링룸의 10가지 테마 방을 소개해요. 모두 무료이고 로그인 없이 바로 들어가요.'
-    cards = '\n'.join(f'''      <a class="card" href="/themes/{t["room"]}.html" style="background-image: url('/images/{t["image"]}.webp')">
+    cards = '\n'.join(f'''      <a class="card" href="/themes/{t["room"]}" style="background-image: url('/images/{t["image"]}.webp')">
         <span><b>{esc(t["name"])}</b>{esc(t["keyword"].split(" · ", 1)[-1])}</span></a>''' for t in THEMES)
     body = f'''  <main class="content">
     <h1>테마 모음</h1>
@@ -298,14 +300,14 @@ def themes_index():
         {'@type': 'CollectionPage', 'url': f'{SITE}{path}', 'name': title, 'description': description, 'inLanguage': 'ko-KR',
          'dateModified': TODAY, 'isPartOf': {'@id': f'{SITE}/#website'}},
         {'@type': 'ItemList', 'itemListElement': [
-            {'@type': 'ListItem', 'position': i + 1, 'name': t['title'], 'url': f'{SITE}/themes/{t["room"]}.html'}
+            {'@type': 'ListItem', 'position': i + 1, 'name': t['title'], 'url': f'{SITE}/themes/{t["room"]}'}
             for i, t in enumerate(THEMES)]},
         crumbs(('힐링룸', '/'), ('테마', path))]}
-    write('/themes/index.html', page(title, description, path, '/images/og-image.jpg?v=2', body, ld))
+    write_page('themes/index.html', page(title, description, path, '/images/og-image.jpg?v=2', body, ld))
 
 
 def about():
-    path = '/about.html'
+    path = '/about'
     title = '힐링룸 소개 · 멍하니 쉬어 가는 무료 웹 공간'
     description = '힐링룸이 무엇인지, 같은 음악을 어떻게 함께 듣는지, 소리는 어떻게 만드는지, 개인정보는 어떻게 다루는지 정리했어요.'
     how = [('방 고르기', '첫 화면에서 테마 방을 누르거나, 방 만들기에서 이름과 테마를 골라 새 방을 만들어요.'),
@@ -351,12 +353,12 @@ def about():
         {'@type': 'HowTo', 'name': '힐링룸에서 쉬는 방법', 'step': [
             {'@type': 'HowToStep', 'position': i + 1, 'name': n, 'text': d} for i, (n, d) in enumerate(how)]},
         crumbs(('힐링룸', '/'), ('소개', path))]}
-    write(path, page(title, description, path, '/images/og-image.jpg?v=2', body, ld))
+    write_page('about.html', page(title, description, path, '/images/og-image.jpg?v=2', body, ld))
 
 
 def sitemap():
-    urls = [('/', '1.0', 'weekly'), ('/themes/', '0.9', 'weekly'), ('/about.html', '0.6', 'monthly')]
-    urls += [(f'/themes/{t["room"]}.html', '0.8', 'monthly') for t in THEMES]
+    urls = [('/', '1.0', 'weekly'), ('/themes', '0.9', 'weekly'), ('/about', '0.6', 'monthly')]
+    urls += [(f'/themes/{t["room"]}', '0.8', 'monthly') for t in THEMES]
     urls += [('/llms.txt', '0.3', 'monthly')]
     body = '\n'.join(f'''  <url>
     <loc>{SITE}{p}</loc>
@@ -365,19 +367,27 @@ def sitemap():
     <priority>{pr}</priority>
   </url>''' for p, pr, c in urls)
     write('/sitemap.xml', f'''<?xml version="1.0" encoding="UTF-8"?>
-<!-- scripts/seo_pages.py 로 만든다. 방 주소(#방id)는 해시라 검색엔진이 따로 보지 않으므로 소개 페이지들을 올린다 -->
+<!-- scripts/seo_pages.py 로 만든다. 방 주소(/방id)는 첫 화면과 같은 내용이라 소개 페이지들을 올린다 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 {body}
 </urlset>
 ''')
 
 
+def write_page(path, text):
+    """소개 페이지는 resources/pages/ 에 둔다 (정적 파일로 바로 내보내지 않고 SiteController 가 깔끔한 주소로 보여줌)"""
+    save(os.path.join(PAGES, path), text, 'pages/' + path)
+
+
 def write(path, text):
-    full = os.path.join(ROOT, path.lstrip('/'))
+    save(os.path.join(ROOT, path.lstrip('/')), text, 'static' + path)
+
+
+def save(full, text, label):
     os.makedirs(os.path.dirname(full), exist_ok=True)
     with open(full, 'w', encoding='utf-8', newline='\n') as f:
         f.write(text)
-    print('wrote', path)
+    print('wrote', label)
 
 
 if __name__ == '__main__':

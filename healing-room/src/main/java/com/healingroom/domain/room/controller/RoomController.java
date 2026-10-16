@@ -37,10 +37,10 @@ public class RoomController {
         return ResponseEntity.noContent().build();
     }
 
-    /** 열려 있는 방 목록 + 방마다 지금 있는 사람 수 (로비에서 사용) */
+    /** 로비에 보일 방 목록 + 방마다 지금 있는 사람 수 (늘 보이는 방·사용자 방·사람 있는 기본 방) */
     @GetMapping
     public List<RoomResponse> list() {
-        return roomService.findOpen();
+        return roomService.findLobby();
     }
 
     /** 방 하나 + 환경음 목록 (방에 들어갈 때 사용). 닫힌 방이면 404 */

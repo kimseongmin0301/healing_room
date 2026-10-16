@@ -28,6 +28,10 @@ public class Room {
     @Column(name = "is_default", nullable = false)
     private boolean isDefault;
 
+    /** 로비에 늘 보이기. 아니면 기본 방은 사람이 있을 때만 로비에 나온다 */
+    @Column(nullable = false)
+    private boolean featured;
+
     @Column(name = "created_by")
     private String createdBy;
 
@@ -75,6 +79,7 @@ public class Room {
     public String getThemeId() { return themeId; }
     public String getName() { return name; }
     public boolean isDefault() { return isDefault; }
+    public boolean isFeatured() { return featured; }
     public String getCreatedBy() { return createdBy; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getEmptiedAt() { return emptiedAt; }

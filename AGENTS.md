@@ -14,14 +14,14 @@
 **힐링룸(Healing Room)**: 불멍, 바다멍 같은 테마를 골라 방을 만들고, 실사 배경, 움직이는 효과, 환경음, **함께 듣는 YouTube 음악**으로 쉬는 웹 서비스입니다.
 
 - **로그인이 없습니다(만들지 않음).** 브라우저마다 UUID(방문자 id)를 만들어 localStorage에 두고 씁니다.
-- **테마(theme)**는 배경, 효과, 환경음, 기본 음악의 묶음입니다. **방(room)**은 누구나 이름과 테마를 골라 만들 수 있고, 아무도 없는 채로 **30분**이 지나면 닫힙니다. **기본 방**은 테마마다 하나씩 있고 닫히지 않습니다. 테마 10개와 기본 방 id: cabin, sea, forest, forest-rain→`rain`, rain-cafe→`cafe`, snow-cabin→`snow`, sunset-beach→`sunset`, space-station→`space`, space-nebula→`galaxy`, lounge-club→`club` (방 id 는 12자 제한, 주소 `/#id`).
+- **테마(theme)**는 배경, 효과, 환경음, 기본 음악의 묶음입니다. **방(room)**은 누구나 이름과 테마를 골라 만들 수 있고, 아무도 없는 채로 **30분**이 지나면 닫힙니다. **기본 방**은 테마마다 하나씩 있고 닫히지 않습니다. 테마 10개와 기본 방 id: cabin, sea, forest, forest-rain→`rain`, rain-cafe→`cafe`, snow-cabin→`snow`, sunset-beach→`sunset`, space-station→`space`, space-nebula→`galaxy`, lounge-club→`club` (방 id 는 12자 제한, 주소 `/{id}` 예: `/cafe`). 로비에는 불멍·바다멍(`room.featured`)과 사용자 방, 사람이 있는 기본 방만 보입니다(`RoomService.findLobby`).
 - **방장** = 지금 방에 있는 사람 중 가장 먼저 들어온 사람(보통 방을 만든 사람). 방장이 나가면 그다음에 들어온 사람이 방장이 됩니다. 새로고침처럼 20초 안에 돌아오면 자리를 지켜 줍니다.
 - 같은 방에 있는 사람은 **같은 곡을 같은 위치로** 듣습니다(라디오처럼 동기화). 영상은 직접 조작할 수 없고, **방장만** 모두의 재생을 멈추고/이어 틀고/위치를 옮길 수 있습니다.
 - 누구나 YouTube 링크로, 또는 **직접 검색**해서 곡을 신청할 수 있습니다(개수 제한 없음. 검색은 한 사람이 1분에 5번). 대기열이 비면 **방금 나온 곡과 비슷한 영상이 자동으로 이어지고(자동 추천)**, 추천을 못 찾으면 테마 기본 음악이 나옵니다. 자동으로 넣은 곡(기본 음악·자동 추천)은 누구나 바로 넘길 수 있고, 신청곡이 들어오면 바로 바뀝니다.
 - 넘기기/빼기: **내 신청곡**과 **방장**은 바로, 그 밖에는 **방 인원의 50%를 넘는(과반) 투표**가 필요합니다. 대기열 순서는 방장만 바꿉니다.
 - 곡 추천: 내 신청 기록(브라우저), YouTube에서 찾은 비슷한 영상(API 키 필요), 함께 신청된 곡, 테마 인기곡.
 - 영상 자막은 끕니다. 자동 추천은 같은 노래의 다른 영상(공식 MV·라이브·가사 영상)을 다시 고르지 않습니다.
-- **접속자 목록**: 방 사람 수와 닉네임, **앞부분만 보이는 IP**(`203.0.*.*`)를 모두에게 보여줍니다. 전체 IP 는 관리자 화면(`/admin.html`, `ADMIN_TOKEN`)에서만 봅니다.
+- **접속자 목록**: 방 사람 수와 닉네임, **앞부분만 보이는 IP**(`203.0.*.*`)를 모두에게 보여줍니다. 전체 IP 는 관리자 화면(`/admin`, `ADMIN_TOKEN`)에서만 봅니다.
 - **방 채팅**: 닉네임은 자동으로 붙고("졸린 고양이" 같은) 바꿀 수 있습니다(브라우저에 저장). 메시지는 Redis에 방마다 최근 100개를 보관하고, 사용자 방은 닫힐 때 지우며 기본 방은 최근 24시간만 보여줍니다.
 
 ## 2. 기술 스택
@@ -92,6 +92,8 @@
       │  │  ├─ repository/          RecommendRepository (JdbcClient 집계 SQL: 테마 인기곡, 함께 신청된 곡)
       │  │  ├─ client/              YouTubeSearchClient (비슷한 영상·직접 검색, 12시간 캐시, 할당량 소진 감지)
       │  │  └─ dto/                 RecommendationResponse, VideoSuggestion, SearchResult
+      │  ├─ site/                   ← 화면 주소 (.html·# 없이)
+      │  │  └─ controller/          SiteController  /{방id} → 첫 화면, /about·/themes·/themes/{id}·/admin → resources/pages/, 예전 .html 주소는 301
       │  ├─ feedback/               ← 로비 의견 보내기 (익명)
       │  │  ├─ controller/          FeedbackController       POST /api/feedback
       │  │  ├─ service/             FeedbackService (입력 정리, 한 브라우저 10분에 3번·전체 1시간에 60번, 관리자 조회·삭제)
@@ -119,14 +121,14 @@
          ├─ index.html (링크 미리보기 og 메타 태그 포함), favicon.ico, css/style.css
          ├─ images/                 테마 배경(webp), 마스코트(mascot*.webp), og-image.jpg(링크 미리보기 1200×630), 아이콘, support-qr.png
          └─ js/
-            ├─ app.js               진입점: #방id 라우팅(로비 ↔ 방), 애니메이션 루프
+            ├─ app.js               진입점: 주소 /{방id} 라우팅(history API, 예전 /#id 는 바꿔 줌, 로비 ↔ 방), 애니메이션 루프
             ├─ api.js               fetch 래퍼, 방문자 id(UUID), localStorage 도우미
             ├─ lobby.js             로비 방 카드 + 인원(한 쪽에 6·4·2개, 좌우 버튼으로 넘기기), 방 만들기
             ├─ room-socket.js       WebSocket 연결·재연결
             ├─ music.js             YouTube 플레이어 동기화(자막 끄기), 방장 조작, 대기열/지난 신청곡/추천/검색 탭, 내 신청 기록, 창 최소화·최대화
             ├─ chat.js              채팅 창 (지난 대화, 보내기, 실시간 수신, 닉네임, 접기·안 읽은 수)
             ├─ people.js            함께 있는 사람 목록 (닉네임, 가린 IP, 방장 👑)
-            ├─ admin.js             관리자 화면 (static/admin.html)
+            ├─ admin.js             관리자 화면 (static/admin)
             ├─ support.js           위쪽 ☕ 서버비 후원 버튼 → 카카오페이 QR 창
             ├─ scene.js             캔버스 공통 도구 (cover 맞춤, 좌표 변환, wobble, glow, 배경 영상)
             ├─ audio/sounds.js      환경음 합성 (fire, wind, rain, waves, crickets, stream, thunder, hum, pad, city, seagulls, beat)
@@ -181,6 +183,7 @@ cd healing-room
 | `V7__more_themes.sql` | 새 테마 8개 (행만 추가): 환경음, 임베드 재생 확인한 기본 음악 | ✅ |
 | `V8__default_rooms_for_all_themes.sql` | 새 테마 8개의 기본 방 (id: forest, rain, cafe, snow, sunset, space, galaxy, club) | ✅ |
 | `V9__feedback.sql` | 로비 의견 보내기 `feedback` 테이블 (익명, IP·연락처 없음) | ✅ |
+| `V10__room_featured.sql` | `room.featured` (로비에 늘 보이기: cabin, sea) | ✅ |
 
 > V1~V4 파일 안의 `room` 은 지금의 `theme` 입니다(V5 에서 이름이 바뀜).
 
@@ -219,7 +222,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | `REDIS_HOST`, `REDIS_PORT` | Redis 접속 정보 |
 | `REDIS_USERNAME`, `REDIS_PASSWORD` | 전용 계정 `healing_room` (6절) |
 | `REDIS_DATABASE` | Redis DB 번호 (1) |
-| `ADMIN_TOKEN` | 관리자 화면(`/admin.html`) 키. 비워 두면 관리자 기능이 꺼짐(404). 전체 IP 가 보이므로 길고 무작위로 |
+| `ADMIN_TOKEN` | 관리자 화면(`/admin`) 키. 비워 두면 관리자 기능이 꺼짐(404). 전체 IP 가 보이므로 길고 무작위로 |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 키. "비슷한 영상" 추천·자동 추천·직접 검색에 쓰며, 비워 두면 그 기능만 꺼짐. 검색 1번 = 하루 할당량 10,000 중 100 (직접 검색은 +1). 할당량을 다 쓰면 태평양 시간 자정(한국 오후 4~5시)까지 쉼 |
 
 `.env`는 절대 커밋하지 마세요. 새 키를 추가하면 `.env.example`도 함께 고치세요.
@@ -267,7 +270,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 
 ### 기록 초기화 (RoomResetService)
 - 이상한 영상이 올라왔을 때 등 방의 흔적을 지웁니다: `room_queue_item`(지난 신청곡·재생 기록, 투표는 FK CASCADE) 삭제 → 인기곡·함께 신청된 곡·자동 추천 후보에서도 사라짐, Redis 채팅 키 삭제 후 `chat-clear` 알림으로 화면도 비움. 전체 초기화는 YouTube 검색 캐시도 비웁니다. 지운 뒤 사람이 있는 방은 기본 음악부터 다시 틉니다.
-- 방문자는 **기본 방의 방장만** 할 수 있습니다(화면의 "🧹 기록 초기화"). 사용자 방은 30분 비면 닫히므로 대상이 아닙니다. 관리자는 `/admin.html` 에서 방별·전체 초기화.
+- 방문자는 **기본 방의 방장만** 할 수 있습니다(화면의 "🧹 기록 초기화"). 사용자 방은 30분 비면 닫히므로 대상이 아닙니다. 관리자는 `/admin` 에서 방별·전체 초기화.
 - 브라우저 `localStorage.myRequests`(내 신청 기록)는 각자 브라우저에 있어 서버에서 지울 수 없습니다.
 
 ### 직접 검색 (SearchService)
@@ -305,7 +308,8 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 원본 PNG 는 저장소에 넣지 말고 webp 로 바꿔 넣습니다 (방 만들기 화면에서 모든 테마 배경을 미리보기로 불러옴).
 - 환경음을 추가하려면 `audio/sounds.js`의 `SOUNDS`에 키를 추가하고, 같은 키를 `theme_ambient.sound`에 씁니다.
 - 브라우저 저장소(localStorage)는 `api.js`의 `store`를 쓰세요(실패해도 무시).
-- **소개 페이지(SEO/AEO/GEO)**: `themes/{기본 방 id}.html`(테마 10개), `themes/index.html`, `about.html`, `images/og/{id}.jpg`, `sitemap.xml` 은 **`scripts/seo_pages.py` 로 만든 결과물**입니다. 직접 고치지 말고 스크립트의 `THEMES` 등을 고친 뒤 `python scripts/seo_pages.py` 로 다시 만들어 함께 커밋하세요(Pillow·맑은 고딕 필요). `/themes/` 주소는 `StaticPageConfig` 가 `themes/index.html` 로 연결합니다. 테마를 추가하면 스크립트와 `llms.txt` 에도 넣습니다.
+- **소개 페이지(SEO/AEO/GEO)**: `resources/pages/themes/{기본 방 id}.html`(테마 10개), `pages/themes/index.html`, `pages/about.html`, `static/images/og/{id}.jpg`, `static/sitemap.xml` 은 **`scripts/seo_pages.py` 로 만든 결과물**입니다. 직접 고치지 말고 스크립트의 `THEMES` 등을 고친 뒤 `python scripts/seo_pages.py` 로 다시 만들어 함께 커밋하세요(Pillow·맑은 고딕 필요). 주소는 `.html` 없이 `SiteController` 가 보여줍니다(`/about`, `/themes`, `/themes/cafe`). 테마를 추가하면 스크립트와 `llms.txt` 에도 넣습니다.
+- **오류 화면**: `static/error/404.html`, `4xx.html`, `5xx.html` (스프링이 상태 코드로 고름). 처음으로 버튼과 5초 뒤 `/` 로 이동. API 오류는 그대로 JSON.
 - **검색·AI 노출(SEO/AEO)**: `index.html` 의 og 메타 태그·JSON-LD(WebSite, WebApplication, FAQPage), 로비 아래 소개·자주 묻는 질문(`.about`), `robots.txt`·`sitemap.xml`·`llms.txt`. **FAQ 를 바꾸면 JSON-LD 의 FAQPage 도 같은 내용으로** 바꾸고, 기능이 바뀌면 `llms.txt` 도 고치세요. 테마를 추가하면 `.about-themes` 와 JSON-LD `featureList` 에도 넣습니다.
 - **소리는 음악과 환경음을 따로 켜고 끕니다** (`app.js`의 `setMusic`, `setAmbient`).
   - 음악이 소리를 내며 재생되기 시작하면 환경음을 자동으로 끄고("환경음 쉬는 중"), 음악을 끄거나 멈추면 자동으로 껐던 환경음만 다시 켭니다. 곡 사이 잠깐 끊김에 깜빡이지 않도록 멈춤은 4초 기다렸다 알립니다(`music.js`의 `onMusicAudible`).

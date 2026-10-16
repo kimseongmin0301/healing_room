@@ -60,7 +60,7 @@ class RoomControllerTests {
 
     @Test
     void listOpenRoomsWithThemeAndListeners() throws Exception {
-        given(roomService.findOpen()).willReturn(List.of(CABIN));
+        given(roomService.findLobby()).willReturn(List.of(CABIN));
 
         mvc.perform(get("/api/rooms"))
                 .andExpect(status().isOk())

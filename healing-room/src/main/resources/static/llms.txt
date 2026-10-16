@@ -6,16 +6,16 @@
 
 ## 테마 방 (모두 항상 열려 있고, 주소로 바로 들어간다)
 
-- [불멍 · 겨울 오두막](https://healing.kimseongmin.co.kr/themes/cabin.html): 눈 내리는 오두막의 모닥불, 장작 타는 소리. 바로 가기 https://healing.kimseongmin.co.kr/#cabin
-- [바다멍 · 달빛 바다](https://healing.kimseongmin.co.kr/themes/sea.html): 달빛 밤바다, 파도·풀벌레 소리. 바로 가기 https://healing.kimseongmin.co.kr/#sea
-- [숲멍 · 반딧불 시냇가](https://healing.kimseongmin.co.kr/themes/forest.html): 반딧불 날아다니는 밤 숲, 시냇물 소리. 바로 가기 https://healing.kimseongmin.co.kr/#forest
-- [비멍 · 비 오는 숲](https://healing.kimseongmin.co.kr/themes/rain.html): 처마 아래 빗소리 백색소음, 먼 천둥. 바로 가기 https://healing.kimseongmin.co.kr/#rain
-- [카페멍 · 비 오는 창가](https://healing.kimseongmin.co.kr/themes/cafe.html): 비 오는 카페 창가, 카페 재즈와 도시 소리. 바로 가기 https://healing.kimseongmin.co.kr/#cafe
-- [눈멍 · 눈 내리는 산장](https://healing.kimseongmin.co.kr/themes/snow.html): 오로라 아래 눈 내리는 산장, 눈바람·벽난로. 바로 가기 https://healing.kimseongmin.co.kr/#snow
-- [노을멍 · 노을 해변](https://healing.kimseongmin.co.kr/themes/sunset.html): 해 지는 해변, 파도·갈매기, 보사노바. 바로 가기 https://healing.kimseongmin.co.kr/#sunset
-- [우주멍 · 우주정거장](https://healing.kimseongmin.co.kr/themes/space.html): 우주정거장 창밖의 행성, 앰비언트. 바로 가기 https://healing.kimseongmin.co.kr/#space
-- [별멍 · 깊은 우주](https://healing.kimseongmin.co.kr/themes/galaxy.html): 성운과 별가루, 명상·수면 앰비언트. 바로 가기 https://healing.kimseongmin.co.kr/#galaxy
-- [클럽 · 라운지](https://healing.kimseongmin.co.kr/themes/club.html): 네온 라운지, 칠 하우스와 라운지 비트. 바로 가기 https://healing.kimseongmin.co.kr/#club
+- [불멍 · 겨울 오두막](https://healing.kimseongmin.co.kr/themes/cabin): 눈 내리는 오두막의 모닥불, 장작 타는 소리. 바로 가기 https://healing.kimseongmin.co.kr/cabin
+- [바다멍 · 달빛 바다](https://healing.kimseongmin.co.kr/themes/sea): 달빛 밤바다, 파도·풀벌레 소리. 바로 가기 https://healing.kimseongmin.co.kr/sea
+- [숲멍 · 반딧불 시냇가](https://healing.kimseongmin.co.kr/themes/forest): 반딧불 날아다니는 밤 숲, 시냇물 소리. 바로 가기 https://healing.kimseongmin.co.kr/forest
+- [비멍 · 비 오는 숲](https://healing.kimseongmin.co.kr/themes/rain): 처마 아래 빗소리 백색소음, 먼 천둥. 바로 가기 https://healing.kimseongmin.co.kr/rain
+- [카페멍 · 비 오는 창가](https://healing.kimseongmin.co.kr/themes/cafe): 비 오는 카페 창가, 카페 재즈와 도시 소리. 바로 가기 https://healing.kimseongmin.co.kr/cafe
+- [눈멍 · 눈 내리는 산장](https://healing.kimseongmin.co.kr/themes/snow): 오로라 아래 눈 내리는 산장, 눈바람·벽난로. 바로 가기 https://healing.kimseongmin.co.kr/snow
+- [노을멍 · 노을 해변](https://healing.kimseongmin.co.kr/themes/sunset): 해 지는 해변, 파도·갈매기, 보사노바. 바로 가기 https://healing.kimseongmin.co.kr/sunset
+- [우주멍 · 우주정거장](https://healing.kimseongmin.co.kr/themes/space): 우주정거장 창밖의 행성, 앰비언트. 바로 가기 https://healing.kimseongmin.co.kr/space
+- [별멍 · 깊은 우주](https://healing.kimseongmin.co.kr/themes/galaxy): 성운과 별가루, 명상·수면 앰비언트. 바로 가기 https://healing.kimseongmin.co.kr/galaxy
+- [클럽 · 라운지](https://healing.kimseongmin.co.kr/themes/club): 네온 라운지, 칠 하우스와 라운지 비트. 바로 가기 https://healing.kimseongmin.co.kr/club
 
 ## 핵심 사실
 
@@ -29,6 +29,6 @@
 
 ## 더 읽기
 
-- [서비스 소개](https://healing.kimseongmin.co.kr/about.html): 사용법, 작동 원리, 개인정보, 만든 사람
-- [테마 모음](https://healing.kimseongmin.co.kr/themes/)
+- [서비스 소개](https://healing.kimseongmin.co.kr/about): 사용법, 작동 원리, 개인정보, 만든 사람
+- [테마 모음](https://healing.kimseongmin.co.kr/themes)
 - [소스 코드 (GitHub)](https://github.com/kimseongmin0301/healing_room)
