@@ -21,7 +21,15 @@
         "url": "https://healing.kimseongmin.co.kr/",
         "inLanguage": "ko-KR",
         "description": "화면을 켜두고 멍하니 쉬며 같은 방 사람들과 같은 음악을 듣는 무료 웹 서비스",
-        "publisher": { "@id": "https://healing.kimseongmin.co.kr/#publisher" }
+        "publisher": { "@id": "https://healing.kimseongmin.co.kr/#publisher" },
+        "author": { "@id": "https://healing.kimseongmin.co.kr/#author" }
+      },
+      {
+        "@type": "Person",
+        "@id": "https://healing.kimseongmin.co.kr/#author",
+        "name": "김성민",
+        "url": "https://github.com/kimseongmin0301",
+        "sameAs": ["https://github.com/kimseongmin0301"]
       },
       {
         "@type": "Organization",
@@ -29,7 +37,8 @@
         "name": "힐링룸",
         "url": "https://healing.kimseongmin.co.kr/",
         "logo": "https://healing.kimseongmin.co.kr/images/icon-192.png",
-        "sameAs": ["https://github.com/kimseongmin0301/healing_room"]
+        "sameAs": ["https://github.com/kimseongmin0301/healing_room"],
+        "founder": { "@id": "https://healing.kimseongmin.co.kr/#author" }
       },
       {
         "@type": "WebApplication",
@@ -37,6 +46,7 @@
         "url": "https://healing.kimseongmin.co.kr/",
         "image": "https://healing.kimseongmin.co.kr/images/og-cat.jpg",
         "description": "화면을 켜두고 멍하니 쉬는 무료 웹 서비스. 불멍, 바다멍, 비 오는 숲, 우주 같은 움직이는 실사 배경과 환경음 속에서 같은 방 사람들과 YouTube 음악을 같은 위치로 함께 듣고 채팅해요. 로그인 없이 바로 쓸 수 있어요.",
+        "author": { "@id": "https://healing.kimseongmin.co.kr/#author" },
         "applicationCategory": "LifestyleApplication",
         "operatingSystem": "Any (웹 브라우저)",
         "browserRequirements": "최신 웹 브라우저",
@@ -218,7 +228,11 @@
       </form>
     </section>
 
-
+    <!-- 만든 사람 (로비에만. 방 안에는 넣지 않는다) -->
+    <footer class="site-foot">
+      <p>만든 사람 <b>김성민</b> · <a href="https://github.com/kimseongmin0301" target="_blank" rel="author noopener">GitHub</a> · <a href="/about">힐링룸 소개</a> · <a href="/themes">테마 모음</a></p>
+      <p>© 2026 힐링룸</p>
+    </footer>
   </section>
 
   <!-- 방 -->

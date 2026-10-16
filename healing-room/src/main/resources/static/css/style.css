@@ -61,6 +61,11 @@ body:not(.in-room) canvas { display: none; }
 .about details p { margin: 8px 0 0; }
 /* 로비 의견 보내기 */
 .feedback { margin-top: 36px; padding: 22px; max-width: 760px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, .03); }
+.site-foot { margin-top: 40px; padding: 18px 0 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; text-align: center; }
+.site-foot p { margin: 4px 0; }
+.site-foot b { color: var(--text); font-weight: 500; }
+.site-foot a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.site-foot a:hover { color: var(--accent); }
 .feedback h2 { margin: 0 0 6px; font-size: 17px; }
 .feedback-form textarea {
   width: 100%; box-sizing: border-box; margin-top: 12px; padding: 10px 12px; border-radius: 10px; resize: vertical;

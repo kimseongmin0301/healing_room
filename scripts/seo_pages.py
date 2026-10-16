@@ -24,6 +24,10 @@ RESOURCES = os.path.join(os.path.dirname(__file__), '..', 'healing-room', 'src',
 ROOT = os.path.join(RESOURCES, 'static')   # 정적 파일 (이미지, sitemap)
 PAGES = os.path.join(RESOURCES, 'pages')   # 소개 페이지 (SiteController 가 .html 없는 주소로 보여줌)
 SITE = 'https://healing.kimseongmin.co.kr'
+AUTHOR_NAME = '김성민'
+AUTHOR_URL = 'https://github.com/kimseongmin0301'
+# 만든 사람: 모든 소개 페이지의 구조화 데이터에 넣는다 (검색엔진·AI 가 누가 운영하는지 알 수 있게)
+AUTHOR_LD = {'@type': 'Person', '@id': f'{SITE}/#author', 'name': AUTHOR_NAME, 'url': AUTHOR_URL, 'sameAs': [AUTHOR_URL]}
 TODAY = date.today().isoformat()
 FONT_BOLD = 'C:/Windows/Fonts/malgunbd.ttf'
 FONT = 'C:/Windows/Fonts/malgun.ttf'
@@ -142,6 +146,8 @@ esc = html.escape
 
 def page(title, description, path, image, body, ld, extra_head=''):
     url = f'{SITE}{path}'
+    ld['@graph'][0]['author'] = {'@id': f'{SITE}/#author'}
+    ld['@graph'].append(AUTHOR_LD)
     return f'''<!doctype html>
 <html lang="ko">
 <head>
@@ -175,8 +181,8 @@ def page(title, description, path, image, body, ld, extra_head=''):
     <nav><a href="/themes">테마</a><a href="/about">소개</a></nav></header>
 {body}
   <footer class="foot">
-    <p><a href="/">힐링룸</a> · <a href="/themes">테마 모음</a> · <a href="/about">서비스 소개</a> · <a href="https://github.com/kimseongmin0301/healing_room">GitHub</a></p>
-    <p>최종 수정 {TODAY}</p>
+    <p><a href="/">힐링룸</a> · <a href="/themes">테마 모음</a> · <a href="/about">서비스 소개</a></p>
+    <p>만든 사람 {AUTHOR_NAME} · <a href="{AUTHOR_URL}" rel="author">GitHub</a> · 최종 수정 {TODAY}</p>
   </footer>
 </body>
 </html>
