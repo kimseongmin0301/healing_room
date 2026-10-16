@@ -1,14 +1,15 @@
 // 눈 내리는 산장: 내리는 눈, 오로라 일렁임, 창문·랜턴 불빛, 얼어붙은 호수 반짝임. 클릭하면 바람이 분다
 import { snow, flicker, glints, sprite } from './parts.js';
 
-const AURORA = [[0.48, 0.12], [0.56, 0.08], [0.63, 0.14], [0.7, 0.1], [0.76, 0.16]];
+const AURORA = [[0.27, 0.08], [0.43, 0.2], [0.52, 0.18], [0.78, 0.12], [0.84, 0.2]];
+const MOON = [0.695, 0.218];
 
 export function create(scene) {
   const { ctx } = scene;
   const flakes = snow(scene, 320);
-  const windows = flicker(scene, [[0.05, 0.22, 0.06], [0.12, 0.25, 0.04]], '255,170,80', 0.16);
-  const lanterns = flicker(scene, [[0.25, 0.565, 0.035], [0.012, 0.6, 0.03], [0.458, 0.80, 0.04]]);
-  const lake = glints(scene, { u: 0.66, from: 0.63, to: 0.73, narrow: 0.15, wide: 0.05, rgb: '200,230,255', chance: 0.4 });
+  const windows = flicker(scene, [[0.06, 0.5, 0.06], [0.14, 0.45, 0.05], [0.05, 0.58, 0.04]], '255,170,80', 0.16);
+  const lanterns = flicker(scene, [[0.037, 0.27, 0.03], [0.099, 0.83, 0.035], [0.197, 0.64, 0.03], [0.282, 0.616, 0.025], [0.366, 0.76, 0.035], [0.41, 0.63, 0.03]]);
+  const lake = glints(scene, { u: 0.7, from: 0.55, to: 0.8, narrow: 0.02, wide: 0.06, rgb: '200,230,255', chance: 0.4 });
   const veil = sprite('80,255,180');
 
   function draw(t) {
@@ -23,7 +24,9 @@ export function create(scene) {
       ctx.drawImage(veil, x - w / 2, y - h / 3, w, h);
     }
     ctx.globalAlpha = 1;
-    // 2) 호수 반짝임, 창문·랜턴 불빛
+    const [mx, my] = scene.P(...MOON);
+    scene.glow(mx, my, 120 * k, '230,235,255', 0.08 + Math.sin(t * 0.02) * 0.03);
+    // 2) 달빛 호수 반짝임, 창문·랜턴 불빛
     lake();
     windows(t);
     lanterns(t);

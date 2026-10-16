@@ -2,8 +2,8 @@
 // 천장 링에서 흔들리며 내려오는 빛줄기, 공기 중 반짝이, 바닥 반사 일렁임. 클릭하면 플래시
 import { sprite } from './parts.js';
 
-const RING = [0.483, 0.075];
-const PILLARS = [0.316, 0.687];
+const RING = [0.5, 0.05];
+const PILLARS = [0.097, 0.9];
 const BEAT_MS = 600; // 분당 100박
 // 반짝이 위치 (매번 같은 자리에서 반짝이도록 미리 정해 둔다)
 const SPARKS = Array.from({ length: 24 }, () => [Math.random(), 0.15 + Math.random() * 0.55, Math.random() * 7]);
@@ -20,14 +20,14 @@ export function create(scene) {
     const hue = (now / 80) % 360;
 
     // 1) 반짝이는 바닥 반사 일렁임
-    scene.wobble(0, 0.72, 1, 1, 2, (v, p) => Math.sin(v * 240 - t * 0.06) * (0.4 + p * 2) * k);
+    scene.wobble(0, 0.6, 1, 1, 2, (v, p) => Math.sin(v * 240 - t * 0.06) * (0.4 + p * 2) * k);
 
     ctx.globalCompositeOperation = 'lighter';
     // 2) 천장 링과 기둥 네온이 박자에 맞춰 밝아진다
     const [rx, ry] = scene.P(...RING);
     scene.glow(rx, ry, 220 * k, '200,120,255', 0.08 + pulse * 0.12);
     for (const u of PILLARS) {
-      for (let v = 0.12; v < 0.42; v += 0.06) {
+      for (let v = 0.04; v < 0.42; v += 0.06) {
         const [x, y] = scene.P(u, v);
         scene.glow(x, y, 40 * k, '120,180,255', 0.05 + pulse * 0.08);
       }
@@ -46,7 +46,7 @@ export function create(scene) {
       ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
     }
     // 4) 방 전체 색 조명이 천천히 바뀐다
-    const [cx, cy] = scene.P(0.5, 0.6);
+    const [cx, cy] = scene.P(0.5, 0.5);
     const wash = ctx.createRadialGradient(cx, cy, 0, cx, cy, scene.fit.w * 0.6);
     wash.addColorStop(0, `hsla(${hue},80%,55%,${0.06 + pulse * 0.05 + flash * 0.3})`);
     wash.addColorStop(1, `hsla(${hue},80%,55%,0)`);

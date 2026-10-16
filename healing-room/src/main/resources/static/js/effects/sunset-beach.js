@@ -2,8 +2,8 @@
 import { glints } from './parts.js';
 import { rand } from '../scene.js';
 
-const SUN = [0.501, 0.397];
-const HORIZON = 0.496;
+const SUN = [0.501, 0.463];
+const HORIZON = 0.476;
 
 export function create(scene) {
   const { ctx } = scene;
@@ -24,7 +24,7 @@ export function create(scene) {
     ctx.globalCompositeOperation = 'source-over';
 
     // 2) 갈매기 실루엣: 날개를 천천히 퍼덕이며 지나간다
-    if (Math.random() < 0.003 && birds.length < 6) addBird(Math.random() < 0.5 ? -0.02 : 1.02, rand(0.12, 0.38));
+    if (Math.random() < 0.003 && birds.length < 6) addBird(Math.random() < 0.5 ? -0.02 : 1.02, rand(0.1, 0.36));
     ctx.strokeStyle = 'rgba(40,20,20,.75)'; ctx.lineWidth = 1.6 * k; ctx.lineCap = 'round';
     for (let i = birds.length - 1; i >= 0; i--) {
       const b = birds[i];
