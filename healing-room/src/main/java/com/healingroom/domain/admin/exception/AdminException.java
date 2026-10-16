@@ -23,4 +23,22 @@ public abstract class AdminException extends ApiException {
             super(HttpStatus.UNAUTHORIZED, "관리자 키가 맞지 않아요.");
         }
     }
+
+    public static class LoginRequired extends AdminException {
+        public LoginRequired() {
+            super(HttpStatus.UNAUTHORIZED, "먼저 로그인해 주세요.");
+        }
+    }
+
+    public static class WrongLogin extends AdminException {
+        public WrongLogin() {
+            super(HttpStatus.UNAUTHORIZED, "아이디나 비밀번호가 맞지 않아요.");
+        }
+    }
+
+    public static class LoginLocked extends AdminException {
+        public LoginLocked() {
+            super(HttpStatus.TOO_MANY_REQUESTS, "여러 번 틀려서 잠시 막았어요. 15분 뒤 다시 시도해 주세요.");
+        }
+    }
 }

@@ -3,66 +3,117 @@ package com.healingroom.domain.admin.controller;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.healingroom.domain.admin.dto.AdminLoginRequest;
 import com.healingroom.domain.admin.dto.AdminPresenceResponse;
+import com.healingroom.domain.admin.service.AdminLoginService;
 import com.healingroom.domain.admin.service.AdminService;
 import com.healingroom.domain.feedback.dto.FeedbackResponse;
 import com.healingroom.domain.feedback.service.FeedbackService;
 import com.healingroom.domain.room.service.RoomResetService;
+import com.healingroom.global.util.ClientRequest;
 
-/** 관리자 API. X-Admin-Token 헤더에 ADMIN_TOKEN 값을 넣어야 한다 (화면: /admin.html) */
+import jakarta.servlet.http.HttpServletRequest;
+
+/**
+ * 관리자 API. 두 단계로 막는다: ① 로그인(쿠키 HR_ADMIN) ② 요청마다 X-Admin-Token 헤더에 ADMIN_TOKEN (화면: /admin)
+ */
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
 
+    private static final String TOKEN = "X-Admin-Token";
+
     private final AdminService adminService;
+    private final AdminLoginService loginService;
     private final RoomResetService resetService;
     private final FeedbackService feedbackService;
 
-    public AdminController(AdminService adminService, RoomResetService resetService, FeedbackService feedbackService) {
+    public AdminController(AdminService adminService, AdminLoginService loginService,
+                           RoomResetService resetService, FeedbackService feedbackService) {
         this.adminService = adminService;
+        this.loginService = loginService;
         this.resetService = resetService;
         this.feedbackService = feedbackService;
     }
 
+    // ---------------------------------------------------------------- 로그인
+
+    /** 아이디·비밀번호가 맞으면 로그인 쿠키를 준다 (자바스크립트로 못 읽고, https 에서만, 다른 사이트에서 보낸 요청엔 안 붙음) */
+    @PostMapping("/login")
+    public ResponseEntity<Void> login(@RequestBody AdminLoginRequest body, HttpServletRequest request) {
+        String session = loginService.login(ClientRequest.ip(request), body.username(), body.password());
+        return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE,
+                cookie(session, AdminLoginService.SESSION_TTL.toSeconds(), request).toString()).build();
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                                       HttpServletRequest request) {
+        loginService.logout(session);
+        return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, cookie("", 0, request).toString()).build();
+    }
+
+    private static ResponseCookie cookie(String value, long maxAgeSeconds, HttpServletRequest request) {
+        return ResponseCookie.from(AdminLoginService.COOKIE, value)
+                .httpOnly(true).secure(ClientRequest.secure(request)).sameSite("Strict").path("/")
+                .maxAge(maxAgeSeconds).build();
+    }
+
+    // ---------------------------------------------------------------- 로그인 + 관리자 키가 있어야 하는 기능
+
+    private void authorize(String session, String token) {
+        loginService.require(session);
+        adminService.authorize(token);
+    }
+
     /** 기록 초기화. roomId 가 있으면 그 방만, 없으면 모든 방 (지난 신청곡·투표·통계·채팅·추천 캐시) */
     @PostMapping("/reset")
-    public Map<String, Object> reset(@RequestHeader(value = "X-Admin-Token", required = false) String token,
+    public Map<String, Object> reset(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                                     @RequestHeader(value = TOKEN, required = false) String token,
                                      @RequestParam(required = false) String roomId) {
-        adminService.authorize(token);
+        authorize(session, token);
         return roomId == null || roomId.isBlank() ? resetService.resetAll() : resetService.reset(roomId);
     }
 
     /** 로비에서 받은 의견 (최근 200개, 최신순) */
     @GetMapping("/feedback")
-    public List<FeedbackResponse> feedback(@RequestHeader(value = "X-Admin-Token", required = false) String token) {
-        adminService.authorize(token);
+    public List<FeedbackResponse> feedback(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                                           @RequestHeader(value = TOKEN, required = false) String token) {
+        authorize(session, token);
         return feedbackService.recent();
     }
 
     /** 장난·도배 의견 지우기 */
     @DeleteMapping("/feedback/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteFeedback(@RequestHeader(value = "X-Admin-Token", required = false) String token,
+    public void deleteFeedback(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                               @RequestHeader(value = TOKEN, required = false) String token,
                                @PathVariable long id) {
-        adminService.authorize(token);
+        authorize(session, token);
         feedbackService.delete(id);
     }
 
     /** 모든 방의 접속자 (닉네임, 전체 IP, 접속 시각) */
     @GetMapping("/presence")
-    public AdminPresenceResponse presence(@RequestHeader(value = "X-Admin-Token", required = false) String token) {
-        adminService.authorize(token);
+    public AdminPresenceResponse presence(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                                          @RequestHeader(value = TOKEN, required = false) String token) {
+        authorize(session, token);
         return adminService.presence();
     }
 }

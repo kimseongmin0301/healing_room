@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>관리자 로그인 · 힐링룸</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="stylesheet" href="/css/style.css">
+  <!-- 관리자 1단계: 로그인. 로그인하면 /admin 이 관리 화면으로 바뀌고, 거기서 다시 관리자 키를 넣는다 -->
+  <style>
+    .login { max-width: 360px; margin: 0 auto; padding: 80px 20px; }
+    .login h1 { margin: 0 0 6px; font-size: 24px; }
+    .login label { display: block; margin-top: 16px; font-size: 13px; color: var(--muted); }
+    .login input { width: 100%; box-sizing: border-box; margin-top: 6px; padding: 10px 12px; border-radius: 10px; font-size: 15px;
+      background: rgba(255, 255, 255, .06); border: 1px solid var(--line); color: var(--text); outline: none; }
+    .login button { width: 100%; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <main class="login">
+    <h1>관리자 로그인</h1>
+    <p class="msg">로그인한 뒤 관리자 키를 한 번 더 넣어야 해요.</p>
+    <form id="login-form">
+      <label>아이디<input id="username" autocomplete="username" required></label>
+      <label>비밀번호 (문장)<input id="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn primary" type="submit">로그인</button>
+      <p id="login-msg" class="msg error" role="status"></p>
+    </form>
+  </main>
+  <script type="module">
+    const $ = id => document.getElementById(id);
+    $('login-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      e.submitter.disabled = true;
+      $('login-msg').textContent = '';
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: $('username').value, password: $('password').value }),
+        });
+        if (res.ok) { location.reload(); return; }  // 로그인 쿠키가 생겼으니 /admin 이 관리 화면으로 바뀐다
+        $('login-msg').textContent = (await res.json().catch(() => null))?.message ?? `로그인하지 못했어요 (${res.status})`;
+        $('password').value = '';
+      } finally {
+        e.submitter.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

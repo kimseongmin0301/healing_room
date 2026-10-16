@@ -87,6 +87,7 @@ async function load() {
     const [res, feedbackRes] = await Promise.all([
       fetch('/api/admin/presence', { headers }), fetch('/api/admin/feedback', { headers })]);
     const data = await res.json().catch(() => null);
+    if (res.status === 401 && data?.message?.includes('로그인')) { location.reload(); return; } // 로그인이 풀리면 로그인 화면으로
     if (!res.ok) throw new Error(data?.message ?? `불러오지 못했어요 (${res.status})`);
     render(data);
     if (feedbackRes.ok) renderFeedback(await feedbackRes.json());
@@ -116,6 +117,13 @@ $('logout').addEventListener('click', () => {
   $('feedback').replaceChildren();
   $('feedback-total').textContent = '';
   $('status').textContent = '키를 지웠어요.';
+});
+
+// 로그아웃: 로그인 쿠키를 지우고 키도 지운 뒤 로그인 화면으로
+$('signout').addEventListener('click', async () => {
+  setToken('');
+  await fetch('/api/admin/logout', { method: 'POST' }).catch(() => {});
+  location.reload();
 });
 
 $('reset-all').addEventListener('click', () => {

@@ -4,6 +4,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -18,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.healingroom.domain.admin.dto.AdminPresenceResponse;
 import com.healingroom.domain.admin.exception.AdminException;
+import com.healingroom.domain.admin.service.AdminLoginService;
 import com.healingroom.domain.admin.service.AdminService;
 import com.healingroom.domain.feedback.dto.FeedbackResponse;
 import com.healingroom.domain.feedback.service.FeedbackService;
@@ -37,6 +39,46 @@ class AdminControllerTests {
 
     @MockitoBean
     FeedbackService feedbackService;
+
+    @MockitoBean
+    AdminLoginService loginService;
+
+    @Test
+    void loginSetsSafeCookie() throws Exception {
+        given(loginService.login(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq("owner"),
+                org.mockito.ArgumentMatchers.eq("문장 비밀번호"))).willReturn("session-1");
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/admin/login")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"owner\",\"password\":\"문장 비밀번호\"}"))
+                .andExpect(status().isNoContent())
+                .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.allOf(
+                        org.hamcrest.Matchers.containsString("HR_ADMIN=session-1"),
+                        org.hamcrest.Matchers.containsString("HttpOnly"),
+                        org.hamcrest.Matchers.containsString("SameSite=Strict"))));
+    }
+
+    @Test
+    void wrongLoginIs401() throws Exception {
+        given(loginService.login(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString())).willThrow(new AdminException.WrongLogin());
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/admin/login")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"x\",\"password\":\"y\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("아이디나 비밀번호가 맞지 않아요."));
+    }
+
+    @Test
+    void adminApiNeedsLoginEvenWithToken() throws Exception {
+        willThrow(new AdminException.LoginRequired()).given(loginService).require(null);
+
+        mvc.perform(get("/api/admin/presence").header("X-Admin-Token", "secret"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("먼저 로그인해 주세요."));
+        org.mockito.Mockito.verify(adminService, org.mockito.Mockito.never()).presence();
+    }
 
     @Test
     void feedbackListNeedsToken() throws Exception {

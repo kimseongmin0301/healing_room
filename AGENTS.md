@@ -100,7 +100,7 @@
       │  │  ├─ repository/ entity/  FeedbackRepository, Feedback
       │  │  ├─ dto/                 FeedbackRequest, FeedbackResponse (방문자 id 앞 8자리만)
       │  │  └─ exception/           FeedbackException
-      │  ├─ admin/                  ← 관리자 (ADMIN_TOKEN 으로 보호)
+      │  ├─ admin/                  ← 관리자: ① 로그인(AdminLoginService, 쿠키) ② 요청마다 ADMIN_TOKEN. /admin 은 로그인 전 pages/admin-login.html
       │  │  ├─ controller/          AdminController          GET /api/admin/presence
       │  │  ├─ service/             AdminService (키 확인, 모든 방 접속자·전체 IP)
       │  │  ├─ dto/                 AdminPresenceResponse
@@ -222,6 +222,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | `REDIS_HOST`, `REDIS_PORT` | Redis 접속 정보 |
 | `REDIS_USERNAME`, `REDIS_PASSWORD` | 전용 계정 `healing_room` (6절) |
 | `REDIS_DATABASE` | Redis DB 번호 (1) |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | 관리자 로그인(1단계). 비밀번호는 원문 대신 `python scripts/admin_password.py` 로 만든 해시(`pbkdf2_sha256$…`)만 넣음. 비면 관리자 기능 전체가 꺼짐(404) |
 | `ADMIN_TOKEN` | 관리자 화면(`/admin`) 키. 비워 두면 관리자 기능이 꺼짐(404). 전체 IP 가 보이므로 길고 무작위로 |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 키. "비슷한 영상" 추천·자동 추천·직접 검색에 쓰며, 비워 두면 그 기능만 꺼짐. 검색 1번 = 하루 할당량 10,000 중 100 (직접 검색은 +1). 할당량을 다 쓰면 태평양 시간 자정(한국 오후 4~5시)까지 쉼 |
 
@@ -254,6 +255,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | POST | `/api/admin/reset?roomId=` | **관리자** 기록 초기화. roomId 가 없으면 모든 방 + YouTube 검색 캐시 |
 | POST | `/api/feedback` | 로비 의견 보내기 `{ "message" }` (1~1000자) → 201. 한 브라우저 10분에 3번·사이트 전체 1시간에 60번 넘으면 429 |
 | GET · DELETE | `/api/admin/feedback`, `/api/admin/feedback/{id}` | **관리자** 받은 의견 최근 200개 / 지우기 |
+| POST | `/api/admin/login`, `/api/admin/logout` | 관리자 로그인 `{ username, password }` → 쿠키 `HR_ADMIN`(HttpOnly·Secure·SameSite=Strict, 8시간). 한 IP 5번 틀리면 15분 429 |
 | GET | `/api/admin/presence` | **관리자** (`X-Admin-Token`) 모든 방 접속자: 닉네임, 전체 IP, 방문자 id 앞 8자리, 들어온 시각 |
 | WS | `/ws/rooms/{roomId}?visitorId={uuid}&nickname={닉네임}` | 연결돼 있는 동안 "방에 있음". 서버 → `state`(음악), `chat`(새 채팅), `presence`(접속자 목록). 브라우저 → `{"type":"nickname","nickname":"…"}`(닉네임 변경). 닫힌 방이면 연결 거부 |
 

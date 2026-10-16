@@ -13,6 +13,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.healingroom.domain.admin.service.AdminLoginService;
 import com.healingroom.domain.room.service.RoomService;
 
 /** 깔끔한 주소(.html·# 없이)와 예전 주소 이동을 확인한다. 페이지 파일은 실제 resources 의 것을 읽는다 */
@@ -24,6 +25,24 @@ class SiteControllerTests {
 
     @MockitoBean
     RoomService roomService;
+
+    @MockitoBean
+    AdminLoginService adminLogin;
+
+    @Test
+    void adminShowsLoginFirstThenAdminPage() throws Exception {
+        given(adminLogin.enabled()).willReturn(true);
+        mvc.perform(get("/admin")).andExpect(status().isOk()).andExpect(content().string(containsString("관리자 로그인")));
+
+        given(adminLogin.isLoggedIn("s1")).willReturn(true);
+        mvc.perform(get("/admin").cookie(new jakarta.servlet.http.Cookie("HR_ADMIN", "s1")))
+                .andExpect(status().isOk()).andExpect(content().string(containsString("받은 의견")));
+    }
+
+    @Test
+    void adminIs404WhenLoginNotConfigured() throws Exception {
+        mvc.perform(get("/admin")).andExpect(status().isNotFound());
+    }
 
     @Test
     void openRoomPathShowsMainPage() throws Exception {
@@ -48,7 +67,6 @@ class SiteControllerTests {
         mvc.perform(get("/about")).andExpect(status().isOk()).andExpect(content().string(containsString("힐링룸 소개")));
         mvc.perform(get("/themes")).andExpect(status().isOk()).andExpect(content().string(containsString("테마 모음")));
         mvc.perform(get("/themes/cafe")).andExpect(status().isOk()).andExpect(content().string(containsString("카페멍")));
-        mvc.perform(get("/admin")).andExpect(status().isOk()).andExpect(content().string(containsString("관리자")));
     }
 
     @Test
