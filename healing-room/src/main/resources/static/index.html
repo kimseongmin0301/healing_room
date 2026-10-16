@@ -110,13 +110,16 @@
           <button class="tab on" data-tab="queue" role="tab">다음 곡 <b id="queue-count">0</b></button>
           <button class="tab" data-tab="history" role="tab">지난 신청곡</button>
           <button class="tab" data-tab="recommend" role="tab">추천</button>
+          <button class="tab" data-tab="search" role="tab">검색</button>
         </div>
         <ol id="queue-list" class="list"></ol>
         <ol id="history-list" class="list" hidden></ol>
         <div id="recommend-list" class="list" hidden></div>
+        <div id="search-list" class="list" hidden></div>
 
+        <!-- 링크면 바로 신청, 아니면 검색 탭에 결과를 보여준다 -->
         <form id="add-form" class="add">
-          <input id="add-url" placeholder="YouTube 링크를 붙여넣어 신청하기" autocomplete="off" required>
+          <input id="add-url" placeholder="노래 검색 또는 YouTube 링크" autocomplete="off" required>
           <button class="btn primary">신청</button>
         </form>
         <p id="music-msg" class="msg" role="status"></p>

@@ -23,6 +23,14 @@ class YouTubeSearchClientTests {
     }
 
     @Test
+    void parsesIsoDuration() {
+        assertThat(YouTubeSearchClient.parseSeconds("PT4M14S")).isEqualTo(254);
+        assertThat(YouTubeSearchClient.parseSeconds("PT1H2M3S")).isEqualTo(3723);
+        assertThat(YouTubeSearchClient.parseSeconds("P0D")).isZero(); // 라이브
+        assertThat(YouTubeSearchClient.parseSeconds("")).isNull();
+    }
+
+    @Test
     void unescapesHtmlEntities() {
         assertThat(YouTubeSearchClient.unescape("Rock &amp; Roll &#39;Live&#39;")).isEqualTo("Rock & Roll 'Live'");
     }

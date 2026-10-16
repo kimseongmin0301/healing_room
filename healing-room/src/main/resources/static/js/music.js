@@ -13,7 +13,7 @@ let loadedItemId = null;
 let durationSent = false;
 let muted = true;
 let syncTimer = null;
-let tab = 'queue';        // 'queue' 다음 곡 / 'history' 지난 신청곡
+let tab = 'queue';        // 'queue' 다음 곡 / 'history' 지난 신청곡 / 'recommend' 추천 / 'search' 검색
 let errorVotedItemId = null;
 let volume = store.get('musicVolume', 70);
 
@@ -370,12 +370,66 @@ async function loadRecommend() {
   section(list, '이 테마 인기곡 (30일)', data.popular, n => `${n}번`, '아직 신청 기록이 없어요');
 }
 
+// ---------------------------------------------------------------- 직접 검색
+
+// YouTube 링크나 영상 id(11자)로 보이면 true → 검색하지 않고 바로 신청
+function looksLikeLink(text) {
+  const t = text.trim();
+  if (/^https?:\/\//i.test(t) || /youtu\.?be/i.test(t)) return true;
+  // 11자 영상 id: 숫자·-·_ 가 섞였거나 대소문자가 섞인 것 (영어 단어 하나는 검색으로)
+  return /^[A-Za-z0-9_-]{11}$/.test(t) && /[0-9_-]|[A-Z].*[a-z]|[a-z].*[A-Z]/.test(t.slice(1));
+}
+
+function searchRow({ youtubeId, title, channel, thumbnail, seconds }) {
+  const li = document.createElement('li');
+  li.className = 'search-item';
+  if (thumbnail) li.append(Object.assign(document.createElement('img'), { src: thumbnail, alt: '', loading: 'lazy' }));
+  const text = Object.assign(document.createElement('span'), { className: 't' });
+  text.append(Object.assign(document.createElement('span'), { className: 'title', textContent: title, title }),
+    Object.assign(document.createElement('span'), { className: 'meta', textContent: `${channel} · ${formatTime(seconds)}` }));
+  const button = Object.assign(document.createElement('button'), { className: 'btn', type: 'button', textContent: '신청' });
+  button.onclick = async () => {
+    if (await request(youtubeId, button)) { button.textContent = '신청됨'; button.disabled = true; }
+  };
+  li.append(text, button);
+  return li;
+}
+
+function searchNote(text) {
+  return Object.assign(document.createElement('div'), { className: 'rec-note', textContent: text });
+}
+
+async function search(query, button) {
+  showTab('search');
+  const list = $('search-list');
+  list.replaceChildren(searchNote(`"${query}" 찾는 중…`));
+  if (button) button.disabled = true;
+  try {
+    const results = await api('GET', `/api/rooms/${roomId}/search?q=${encodeURIComponent(query)}`);
+    if (!results.length) { list.replaceChildren(searchNote('여기서 재생할 수 있는 영상을 찾지 못했어요. 다른 말로 찾아보세요')); return false; }
+    const ol = Object.assign(document.createElement('ol'), { className: 'rec-items' });
+    results.forEach(r => ol.append(searchRow(r)));
+    list.replaceChildren(searchNote(`"${query}" 검색 결과 · 누르면 신청돼요`), ol);
+    message('');
+    return true;
+  } catch (err) {
+    list.replaceChildren(searchNote(err.message));
+    return false;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function showTab(name) {
   tab = name;
   document.querySelectorAll('#music .tab').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
   $('queue-list').hidden = name !== 'queue';
   $('history-list').hidden = name !== 'history';
   $('recommend-list').hidden = name !== 'recommend';
+  $('search-list').hidden = name !== 'search';
+  if (name === 'search' && !$('search-list').childElementCount) {
+    $('search-list').append(searchNote('아래 칸에 노래 제목이나 가수를 입력하고 신청을 누르면 찾아드려요'));
+  }
   if (name === 'history') loadHistory();
   if (name === 'recommend') loadRecommend();
 }
@@ -434,8 +488,13 @@ async function request(url, button) {
 async function addTrack(e) {
   e.preventDefault();
   const input = $('add-url');
-  if (!input.value.trim()) { message('YouTube 링크를 붙여넣어 주세요', true); input.focus(); return; }
-  if (await request(input.value, e.submitter)) input.value = '';
+  const text = input.value.trim();
+  if (!text) { message('노래 제목이나 YouTube 링크를 입력해 주세요', true); input.focus(); return; }
+  if (looksLikeLink(text)) {
+    if (await request(text, e.submitter)) input.value = '';
+  } else {
+    await search(text, e.submitter);
+  }
 }
 
 // ---------------------------------------------------------------- 외부에서 쓰는 함수
@@ -483,6 +542,7 @@ export function enterMusic(id) {
   errorVotedItemId = null;
   lastListsFor = undefined;
   message('');
+  $('search-list').replaceChildren(); // 검색 결과는 방마다 새로
   showTab('queue');
   ensurePlayer();
   clearInterval(syncTimer);

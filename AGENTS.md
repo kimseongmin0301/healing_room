@@ -17,7 +17,7 @@
 - **테마(theme)**는 배경, 효과, 환경음, 기본 음악의 묶음입니다. **방(room)**은 누구나 이름과 테마를 골라 만들 수 있고, 아무도 없는 채로 **30분**이 지나면 닫힙니다. **기본 방**(cabin, sea)은 닫히지 않습니다. 테마는 10개(cabin, sea, forest, forest-rain, rain-cafe, snow-cabin, sunset-beach, space-station, space-nebula, lounge-club)이고, 기본 방이 없는 테마는 방 만들기에서 고릅니다.
 - **방장** = 지금 방에 있는 사람 중 가장 먼저 들어온 사람(보통 방을 만든 사람). 방장이 나가면 그다음에 들어온 사람이 방장이 됩니다. 새로고침처럼 20초 안에 돌아오면 자리를 지켜 줍니다.
 - 같은 방에 있는 사람은 **같은 곡을 같은 위치로** 듣습니다(라디오처럼 동기화). 영상은 직접 조작할 수 없고, **방장만** 모두의 재생을 멈추고/이어 틀고/위치를 옮길 수 있습니다.
-- 누구나 YouTube 링크로 곡을 신청할 수 있습니다(개수 제한 없음). 대기열이 비면 **방금 나온 곡과 비슷한 영상이 자동으로 이어지고(자동 추천)**, 추천을 못 찾으면 테마 기본 음악이 나옵니다. 자동으로 넣은 곡(기본 음악·자동 추천)은 누구나 바로 넘길 수 있고, 신청곡이 들어오면 바로 바뀝니다.
+- 누구나 YouTube 링크로, 또는 **직접 검색**해서 곡을 신청할 수 있습니다(개수 제한 없음. 검색은 한 사람이 1분에 5번). 대기열이 비면 **방금 나온 곡과 비슷한 영상이 자동으로 이어지고(자동 추천)**, 추천을 못 찾으면 테마 기본 음악이 나옵니다. 자동으로 넣은 곡(기본 음악·자동 추천)은 누구나 바로 넘길 수 있고, 신청곡이 들어오면 바로 바뀝니다.
 - 넘기기/빼기: **내 신청곡**과 **방장**은 바로, 그 밖에는 **방 인원의 50%를 넘는(과반) 투표**가 필요합니다. 대기열 순서는 방장만 바꿉니다.
 - 곡 추천: 내 신청 기록(브라우저), YouTube에서 찾은 비슷한 영상(API 키 필요), 함께 신청된 곡, 테마 인기곡.
 - **접속자 목록**: 방 사람 수와 닉네임, **앞부분만 보이는 IP**(`203.0.*.*`)를 모두에게 보여줍니다. 전체 IP 는 관리자 화면(`/admin.html`, `ADMIN_TOKEN`)에서만 봅니다.
@@ -206,7 +206,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | `REDIS_USERNAME`, `REDIS_PASSWORD` | 전용 계정 `healing_room` (6절) |
 | `REDIS_DATABASE` | Redis DB 번호 (1) |
 | `ADMIN_TOKEN` | 관리자 화면(`/admin.html`) 키. 비워 두면 관리자 기능이 꺼짐(404). 전체 IP 가 보이므로 길고 무작위로 |
-| `YOUTUBE_API_KEY` | YouTube Data API v3 키. 추천의 "비슷한 영상"에만 쓰며, 비워 두면 그 기능만 꺼짐. 검색 1번 = 하루 할당량 10,000 중 100 |
+| `YOUTUBE_API_KEY` | YouTube Data API v3 키. "비슷한 영상" 추천·자동 추천·직접 검색에 쓰며, 비워 두면 그 기능만 꺼짐. 검색 1번 = 하루 할당량 10,000 중 100 (직접 검색은 +1). 할당량을 다 쓰면 태평양 시간 자정(한국 오후 4~5시)까지 쉼 |
 
 `.env`는 절대 커밋하지 마세요. 새 키를 추가하면 `.env.example`도 함께 고치세요.
 
@@ -230,6 +230,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | PUT | `/api/rooms/{roomId}/queue/playback` | **방장** `{ "action": "pause" \| "resume" \| "seek", "seconds"? }` |
 | PUT | `/api/rooms/{roomId}/queue/{itemId}/move` | **방장** 대기열 순서 `{ "direction": "up" \| "down" }` |
 | GET | `/api/rooms/{roomId}/recommendations` | 지금 곡 기준 추천 `{ basedOn, similar, similarAvailable, together, popular }` |
+| GET | `/api/rooms/{roomId}/search?q=` | 직접 검색 (방에 있는 사람만) → `[{ youtubeId, title, channel, thumbnail, seconds }]`. 이 사이트에서 재생 가능·라이브 아님·한국 차단 아님만. 1분에 5번 넘으면 429, 할당량 소진·키 없음 503 |
 | GET | `/api/rooms/{roomId}/chat` | 지난 대화 (오래된 것부터, 최대 100개) `[{ id, nickname, text, sentAt, mine }]` |
 | POST | `/api/rooms/{roomId}/chat` | 채팅 보내기 `{ "nickname", "text" }` → 201. 10초에 6개 넘으면 429, Redis 장애 시 503 |
 | POST | `/api/rooms/{id}/reset` | **기본 방의 방장** 기록 초기화 (지난 신청곡·투표·통계·채팅) → 204, 아니면 403 |
