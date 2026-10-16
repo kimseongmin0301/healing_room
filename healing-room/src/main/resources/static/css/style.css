@@ -47,6 +47,15 @@ body:not(.in-room) canvas { display: none; }
 .lobby { max-width: 1100px; margin: 0 auto; padding: 56px 20px 80px; }
 .lobby-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
 .lobby-head h1 { margin: 0; font-size: 34px; font-weight: 700; }
+/* 로비 아래 소개·자주 묻는 질문 (검색엔진·AI 도 읽는 글) */
+.about { margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; line-height: 1.75; }
+.about h2 { margin: 0 0 10px; font-size: 17px; color: var(--text); }
+.about h2 + p { margin: 0 0 16px; max-width: 760px; }
+.about-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 20px; margin: 0 0 32px; padding: 0; list-style: none; }
+.about-themes b { color: var(--text); font-weight: 600; margin-right: 6px; }
+.about details { max-width: 760px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.about summary { cursor: pointer; color: var(--text); }
+.about details p { margin: 8px 0 0; }
 .lobby-head p { margin: 8px 0 0; color: var(--muted); }
 .btn.big { padding: 10px 18px; font-size: 15px; border-radius: 12px; }
 .room-card .badges { position: absolute; top: 14px; left: 14px; right: 14px; z-index: 1; display: flex; gap: 6px; }

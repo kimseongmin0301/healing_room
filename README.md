@@ -302,6 +302,7 @@ healing_room/
       │  └─ global/                 공통 설정, 오류 응답
       └─ resources/static/          프론트엔드
          ├─ index.html · css/ · images/
+         ├─ robots.txt · sitemap.xml · llms.txt   검색엔진·AI 수집기용
          └─ js/
             ├─ app.js               화면 전환 (로비 ↔ 방)
             ├─ lobby.js             로비, 방 만들기

@@ -1,0 +1,25 @@
+# 힐링룸 · https://healing.kimseongmin.co.kr
+# 검색엔진과 AI 수집기 모두 소개 페이지를 읽을 수 있다. API·관리자·실시간 연결은 읽을 필요가 없다.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /ws/
+Disallow: /admin.html
+
+# AI 검색·답변 서비스 (ChatGPT, Claude, Perplexity, Google AI 등) 도 허용
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Google-Extended
+User-agent: Yeti
+Allow: /
+Disallow: /api/
+Disallow: /ws/
+Disallow: /admin.html
+
+Sitemap: https://healing.kimseongmin.co.kr/sitemap.xml

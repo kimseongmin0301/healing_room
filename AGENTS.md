@@ -295,6 +295,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 원본 PNG 는 저장소에 넣지 말고 webp 로 바꿔 넣습니다 (방 만들기 화면에서 모든 테마 배경을 미리보기로 불러옴).
 - 환경음을 추가하려면 `audio/sounds.js`의 `SOUNDS`에 키를 추가하고, 같은 키를 `theme_ambient.sound`에 씁니다.
 - 브라우저 저장소(localStorage)는 `api.js`의 `store`를 쓰세요(실패해도 무시).
+- **검색·AI 노출(SEO/AEO)**: `index.html` 의 og 메타 태그·JSON-LD(WebSite, WebApplication, FAQPage), 로비 아래 소개·자주 묻는 질문(`.about`), `robots.txt`·`sitemap.xml`·`llms.txt`. **FAQ 를 바꾸면 JSON-LD 의 FAQPage 도 같은 내용으로** 바꾸고, 기능이 바뀌면 `llms.txt` 도 고치세요. 테마를 추가하면 `.about-themes` 와 JSON-LD `featureList` 에도 넣습니다.
 - **소리는 음악과 환경음을 따로 켜고 끕니다** (`app.js`의 `setMusic`, `setAmbient`).
   - 음악이 소리를 내며 재생되기 시작하면 환경음을 자동으로 끄고("환경음 쉬는 중"), 음악을 끄거나 멈추면 자동으로 껐던 환경음만 다시 켭니다. 곡 사이 잠깐 끊김에 깜빡이지 않도록 멈춤은 4초 기다렸다 알립니다(`music.js`의 `onMusicAudible`).
   - 사용자가 직접 누른 켜기/끄기는 항상 우선하며 `localStorage.musicOn`, `ambientOn`에 기억합니다.

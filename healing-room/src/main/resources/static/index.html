@@ -3,7 +3,61 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>힐링룸</title>
+  <title>힐링룸 · 불멍 바다멍 하며 함께 음악 듣는 방</title>
+  <link rel="canonical" href="https://healing.kimseongmin.co.kr/">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <!-- 검색엔진·AI 가 이해하기 쉬운 구조화 데이터. 아래 FAQ 는 로비의 "자주 묻는 질문"과 같게 유지한다 -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://healing.kimseongmin.co.kr/#website",
+        "name": "힐링룸",
+        "alternateName": "Healing Room",
+        "url": "https://healing.kimseongmin.co.kr/",
+        "inLanguage": "ko-KR"
+      },
+      {
+        "@type": "WebApplication",
+        "name": "힐링룸",
+        "url": "https://healing.kimseongmin.co.kr/",
+        "image": "https://healing.kimseongmin.co.kr/images/og-image.jpg",
+        "description": "화면을 켜두고 멍하니 쉬는 무료 웹 서비스. 불멍, 바다멍, 비 오는 숲, 우주 같은 움직이는 실사 배경과 환경음 속에서 같은 방 사람들과 YouTube 음악을 같은 위치로 함께 듣고 채팅해요. 로그인 없이 바로 쓸 수 있어요.",
+        "applicationCategory": "LifestyleApplication",
+        "operatingSystem": "Any (웹 브라우저)",
+        "browserRequirements": "최신 웹 브라우저",
+        "inLanguage": "ko-KR",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "KRW" },
+        "featureList": [
+          "불멍, 바다멍, 숲멍, 비멍, 카페멍, 눈멍, 노을멍, 우주멍, 별멍, 클럽 테마",
+          "같은 방 사람들과 YouTube 음악 동기화 재생",
+          "노래 검색과 신청, 비슷한 곡 자동 추천",
+          "장작, 비, 파도, 시냇물 등 환경음 믹서",
+          "로그인 없는 방 채팅",
+          "누구나 방 만들기"
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "힐링룸은 무료인가요? 회원가입이 필요한가요?",
+            "acceptedAnswer": { "@type": "Answer", "text": "무료이고 회원가입이나 로그인이 없어요. 주소를 열고 마음에 드는 방에 들어가면 바로 쓸 수 있어요." } },
+          { "@type": "Question", "name": "다른 사람과 어떻게 같은 음악을 듣나요?",
+            "acceptedAnswer": { "@type": "Answer", "text": "곡이 시작된 시각을 모두가 공유하고, 각자 브라우저가 지금 위치를 계산해서 맞춰요. 5초마다 확인해서 3초 넘게 어긋나면 다시 맞춰요." } },
+          { "@type": "Question", "name": "음악은 어떻게 신청하나요?",
+            "acceptedAnswer": { "@type": "Answer", "text": "음악 창 아래 입력칸에 노래 제목이나 가수를 입력해 검색하거나 YouTube 링크를 붙여 넣어요. 신청곡이 없으면 방금 나온 곡과 비슷한 음악이 이어서 나와요." } },
+          { "@type": "Question", "name": "내 방을 만들 수 있나요?",
+            "acceptedAnswer": { "@type": "Answer", "text": "로비의 방 만들기에서 이름과 테마를 골라 만들 수 있어요. 방 주소를 친구에게 보내면 같은 방에서 함께 쉴 수 있고, 아무도 없는 채로 30분이 지나면 방이 닫혀요." } },
+          { "@type": "Question", "name": "휴대폰에서도 되나요?",
+            "acceptedAnswer": { "@type": "Answer", "text": "네, 휴대폰과 태블릿 브라우저에서도 돼요. 브라우저 정책 때문에 화면을 한 번 누른 뒤에 소리가 나요." } }
+        ]
+      }
+    ]
+  }
+  </script>
   <!-- 링크 미리보기 (카카오톡·페이스북·디스코드 등은 og:*, X(트위터)는 twitter:*) -->
   <meta name="description" content="불멍, 바다멍, 비 오는 숲, 우주. 화면을 켜두고 멍하니 쉬며 같은 방 사람들과 같은 음악을 들어요. 로그인 없이 바로.">
   <meta property="og:type" content="website">
@@ -56,6 +110,38 @@
     </header>
     <p id="lobby-msg" class="msg"></p>
     <div id="room-grid" class="room-grid"></div>
+
+    <!-- 소개·자주 묻는 질문: 사람에게도, 검색엔진·AI(자바스크립트를 실행하지 않는 수집기 포함)에게도 읽히도록 HTML 에 그대로 둔다.
+         아래 FAQ 를 바꾸면 <head> 의 JSON-LD(FAQPage)도 같이 바꾼다 -->
+    <section class="about" aria-labelledby="about-title">
+      <h2 id="about-title">힐링룸은 어떤 곳인가요?</h2>
+      <p>힐링룸은 화면을 켜두고 멍하니 쉬는 무료 웹 서비스예요. 모닥불이 타는 오두막, 달빛 바다, 비 오는 숲, 우주정거장 같은 방에 들어가면
+        실사 배경이 천천히 움직이고 장작 소리, 빗소리, 파도 소리 같은 환경음이 흘러요. 같은 방에 있는 사람들은 YouTube 음악을 같은 곡, 같은 위치로 함께 들어요.</p>
+      <ul class="about-themes">
+        <li><b>불멍</b> 눈 내리는 오두막의 모닥불</li>
+        <li><b>바다멍</b> 달빛이 비치는 밤바다</li>
+        <li><b>숲멍</b> 반딧불이 떠다니는 시냇가</li>
+        <li><b>비멍</b> 처마 아래에서 보는 비 오는 숲</li>
+        <li><b>카페멍</b> 빗방울 흐르는 창가와 커피</li>
+        <li><b>눈멍</b> 오로라 아래 눈 내리는 산장</li>
+        <li><b>노을멍</b> 파도가 밀려오는 노을 해변</li>
+        <li><b>우주멍</b> 우주정거장 창밖의 푸른 행성</li>
+        <li><b>별멍</b> 성운과 별가루가 도는 깊은 우주</li>
+        <li><b>클럽</b> 네온 조명과 잔잔한 하우스 비트</li>
+      </ul>
+
+      <h2>자주 묻는 질문</h2>
+      <details><summary>무료인가요? 회원가입이 필요한가요?</summary>
+        <p>무료이고 회원가입이나 로그인이 없어요. 주소를 열고 마음에 드는 방에 들어가면 바로 쓸 수 있어요.</p></details>
+      <details><summary>다른 사람과 어떻게 같은 음악을 듣나요?</summary>
+        <p>곡이 시작된 시각을 모두가 공유하고, 각자 브라우저가 지금 위치를 계산해서 맞춰요. 5초마다 확인해서 3초 넘게 어긋나면 다시 맞춰요.</p></details>
+      <details><summary>음악은 어떻게 신청하나요?</summary>
+        <p>음악 창 아래 입력칸에 노래 제목이나 가수를 입력해 검색하거나 YouTube 링크를 붙여 넣어요. 신청곡이 없으면 방금 나온 곡과 비슷한 음악이 이어서 나와요.</p></details>
+      <details><summary>내 방을 만들 수 있나요?</summary>
+        <p>로비의 "방 만들기"에서 이름과 테마를 골라 만들 수 있어요. 방 주소를 친구에게 보내면 같은 방에서 함께 쉴 수 있고, 아무도 없는 채로 30분이 지나면 방이 닫혀요.</p></details>
+      <details><summary>휴대폰에서도 되나요?</summary>
+        <p>네, 휴대폰과 태블릿 브라우저에서도 돼요. 브라우저 정책 때문에 화면을 한 번 누른 뒤에 소리가 나요.</p></details>
+    </section>
 
     <!-- 방 만들기 -->
     <div id="create-dialog" class="dialog-backdrop" hidden>

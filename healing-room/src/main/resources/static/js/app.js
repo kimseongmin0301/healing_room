@@ -125,7 +125,7 @@ function showLobbyView() {
   $('room').hidden = true;
   $('lobby').hidden = false;
   document.body.classList.remove('in-room');
-  document.title = '힐링룸';
+  document.title = '힐링룸 · 불멍 바다멍 하며 함께 음악 듣는 방';
   showLobby(id => {
     // 카드를 누른 순간(사용자 클릭)이라 브라우저가 소리를 허용한다. 마지막으로 고른 켜짐/꺼짐을 따른다
     setMusic(store.get('musicOn', true));
