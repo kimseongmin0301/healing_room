@@ -14,7 +14,7 @@
 **힐링룸(Healing Room)**: 불멍, 바다멍 같은 테마를 골라 방을 만들고, 실사 배경, 움직이는 효과, 환경음, **함께 듣는 YouTube 음악**으로 쉬는 웹 서비스입니다.
 
 - **로그인이 없습니다(만들지 않음).** 브라우저마다 UUID(방문자 id)를 만들어 localStorage에 두고 씁니다.
-- **테마(theme)**는 배경, 효과, 환경음, 기본 음악의 묶음입니다. **방(room)**은 누구나 이름과 테마를 골라 만들 수 있고, 아무도 없는 채로 **30분**이 지나면 닫힙니다. 테마마다 하나씩 있는 **기본 방**(cabin, sea)은 닫히지 않습니다.
+- **테마(theme)**는 배경, 효과, 환경음, 기본 음악의 묶음입니다. **방(room)**은 누구나 이름과 테마를 골라 만들 수 있고, 아무도 없는 채로 **30분**이 지나면 닫힙니다. **기본 방**(cabin, sea)은 닫히지 않습니다. 테마는 10개(cabin, sea, forest, forest-rain, rain-cafe, snow-cabin, sunset-beach, space-station, space-nebula, lounge-club)이고, 기본 방이 없는 테마는 방 만들기에서 고릅니다.
 - **방장** = 지금 방에 있는 사람 중 가장 먼저 들어온 사람(보통 방을 만든 사람). 방장이 나가면 그다음에 들어온 사람이 방장이 됩니다. 새로고침처럼 20초 안에 돌아오면 자리를 지켜 줍니다.
 - 같은 방에 있는 사람은 **같은 곡을 같은 위치로** 듣습니다(라디오처럼 동기화). 영상은 직접 조작할 수 없고, **방장만** 모두의 재생을 멈추고/이어 틀고/위치를 옮길 수 있습니다.
 - 누구나 YouTube 링크로 곡을 신청할 수 있습니다(개수 제한 없음). 대기열이 비면 **방금 나온 곡과 비슷한 영상이 자동으로 이어지고(자동 추천)**, 추천을 못 찾으면 테마 기본 음악이 나옵니다. 자동으로 넣은 곡(기본 음악·자동 추천)은 누구나 바로 넘길 수 있고, 신청곡이 들어오면 바로 바뀝니다.
@@ -117,9 +117,10 @@
             ├─ people.js            함께 있는 사람 목록 (닉네임, 가린 IP, 방장 👑)
             ├─ admin.js             관리자 화면 (static/admin.html)
             ├─ scene.js             캔버스 공통 도구 (cover 맞춤, 좌표 변환, wobble, glow, 배경 영상)
-            ├─ audio/sounds.js      환경음 합성 (fire, wind, rain, waves, crickets)
+            ├─ audio/sounds.js      환경음 합성 (fire, wind, rain, waves, crickets, stream, thunder, hum, pad, city, seagulls, beat)
             ├─ audio/mixer.js       환경음 믹서 UI
-            └─ effects/{effect}.js  방별 시각 효과
+            ├─ effects/parts.js     효과 조각 (별, 별똥별, 눈, 비, 웅덩이, 반딧불, 반짝임, 김·안개, 불빛 깜빡임)
+            └─ effects/{effect}.js  테마별 시각 효과 (effect 이름 = 테마 id)
 ```
 
 테스트도 같은 패키지 구조를 따릅니다 (`src/test/java/com/healingroom/domain/...`).
@@ -165,6 +166,7 @@ cd healing-room
 | `V4__replace_default_tracks.sql` | 기본 음악 교체 (임베드 가능한 영상으로) | ✅ |
 | `V6__queue_item_source.sql` | 대기열에 source(request/default/autoplay) 추가 | ✅ |
 | `V5__theme_and_rooms.sql` | room→theme, room_ambient→theme_ambient, room_playlist→theme_track 로 이름 변경. 새 room(사용자 방) 테이블, 기본 방 cabin·sea 생성, 대기열에 paused_at·queue_order 추가 | ✅ |
+| `V7__more_themes.sql` | 새 테마 8개 (행만 추가, 기본 방 없음): 환경음, 임베드 재생 확인한 기본 음악 | ✅ |
 
 > V1~V4 파일 안의 `room` 은 지금의 `theme` 입니다(V5 에서 이름이 바뀜).
 
@@ -276,7 +278,8 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
   }
   ```
 - 좌표는 **배경 기준 0~1 비율(u, v)**로 쓰고, `scene.P(u, v)`로 화면 좌표로 바꿉니다. 크기는 `scene.k`(원본 대비 배율)를 곱합니다. 배경이 영상이면 `wobble`은 자동으로 꺼집니다.
-- 테마를 추가하는 순서: ① `static/images/`에 배경 추가 → ② `db/V{n}__...sql`로 theme, theme_ambient, theme_track 행과 기본 방(room, is_default=true) 추가 → ③ `effects/{effect}.js` 작성
+- 테마를 추가하는 순서: ① `static/images/`에 배경 추가(webp, 1672×941) → ② `db/V{n}__...sql`로 theme, theme_ambient, theme_track 행 추가(기본 방이 필요할 때만 room, is_default=true) → ③ `effects/{effect}.js` 작성(`parts.js` 조각 활용)
+- 원본 PNG 는 저장소에 넣지 말고 webp 로 바꿔 넣습니다 (방 만들기 화면에서 모든 테마 배경을 미리보기로 불러옴).
 - 환경음을 추가하려면 `audio/sounds.js`의 `SOUNDS`에 키를 추가하고, 같은 키를 `theme_ambient.sound`에 씁니다.
 - 브라우저 저장소(localStorage)는 `api.js`의 `store`를 쓰세요(실패해도 무시).
 - **소리는 음악과 환경음을 따로 켜고 끕니다** (`app.js`의 `setMusic`, `setAmbient`).
@@ -331,6 +334,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - [x] 방 채팅 (Redis 보관·도배 방지·pub/sub, 자동 닉네임)
 - [x] 접속자 목록 (닉네임, 가린 IP), 관리자 화면 (전체 IP)
 - [x] 자동 추천 재생 (신청곡이 없으면 비슷한 영상을 이어서)
-- [ ] 테마 추가: 밤하늘, 숲, 모래사장, 클럽 (배경 이미지/영상 필요)
-- [ ] 클럽 방 비트 효과
+- [x] 테마 추가: 숲, 비 오는 숲, 비 오는 카페, 눈 산장, 노을 해변, 우주정거장, 깊은 우주, 라운지 클럽 (V7)
+- [x] 클럽 방 비트 효과 (조명 분당 100박 + 환경음 beat)
+- [ ] 테마별 배경 영상 (선택)
 - 로그인 기능은 **만들지 않습니다** (익명 서비스).
