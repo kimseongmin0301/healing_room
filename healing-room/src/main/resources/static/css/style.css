@@ -107,7 +107,7 @@ body:not(.in-room) canvas { display: none; }
 .dialog.support .dialog-actions { justify-content: center; }
 /* 내보내졌을 때 창 (슬픈 고양이) */
 .dialog.kicked { width: min(340px, 100%); text-align: center; }
-.dialog.kicked img { display: block; width: 140px; height: auto; margin: -6px auto 8px; filter: grayscale(.25); }
+.dialog.kicked img { display: block; width: 160px; height: auto; margin: -6px auto 8px; }
 .dialog.kicked .dialog-actions { justify-content: center; }
 /* 접속자 목록의 내보내기 버튼 (방장에게만) */
 .people-list .kick {
