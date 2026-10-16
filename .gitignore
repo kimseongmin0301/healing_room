@@ -12,3 +12,6 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# 파이썬 실행 기록
+__pycache__/
