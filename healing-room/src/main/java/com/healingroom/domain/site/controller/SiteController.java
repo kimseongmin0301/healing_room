@@ -24,11 +24,11 @@ import jakarta.servlet.http.HttpServletRequest;
  * 화면 주소를 깔끔하게(.html·# 없이) 보여준다.
  * <ul>
  *   <li>방: {@code /cafe}, {@code /ab3k9xqz} → 첫 화면(static/index.html). 화면이 주소를 보고 방에 들어간다. 없거나 닫힌 방은 404</li>
- *   <li>소개 페이지: {@code /about}, {@code /themes}, {@code /themes/cafe} → resources/pages/ (scripts/seo_pages.py 로 만듦)</li>
+ *   <li>소개 페이지: {@code /about}, {@code /privacy}, {@code /themes}, {@code /themes/cafe} → resources/pages/ (scripts/seo_pages.py 로 만듦)</li>
  *   <li>관리자: {@code /admin} → 로그인 전 pages/admin-login.html, 로그인 후 pages/admin.html</li>
  *   <li>예전 주소({@code /about.html}, {@code /themes/cafe.html} 등)는 새 주소로 영구 이동(301) — 검색엔진에 등록된 주소도 넘어오게</li>
  * </ul>
- * 고정 주소(/about, /themes, /admin)가 방 주소 규칙보다 먼저 맞는다. 방 id 는 소문자·숫자(사용자 방은 8자)라 겹치지 않는다.
+ * 고정 주소(/about, /privacy, /themes, /admin)가 방 주소 규칙보다 먼저 맞는다. 방 id 는 소문자·숫자(사용자 방은 8자)라 겹치지 않는다.
  */
 @Controller
 public class SiteController {
@@ -55,6 +55,11 @@ public class SiteController {
     @GetMapping("/about")
     public ResponseEntity<Resource> about() {
         return html("pages/about.html");
+    }
+
+    @GetMapping("/privacy")
+    public ResponseEntity<Resource> privacy() {
+        return html("pages/privacy.html");
     }
 
     /** 로그인 전에는 로그인 화면, 로그인하면 관리 화면 (그 안에서 다시 관리자 키를 넣는다). 로그인 설정이 없으면 404 */

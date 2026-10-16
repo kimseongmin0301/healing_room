@@ -6,7 +6,8 @@
 만드는 것 (healing-room/src/main/resources/ 아래. 주소는 .html 없이 SiteController 가 보여준다)
   pages/themes/{방id}.html   → /themes/{방id}  테마별 소개 페이지 10개 (검색어에 맞춘 제목·설명·자주 묻는 질문·바로 들어가기)
   pages/themes/index.html    → /themes         테마 모음
-  pages/about.html           → /about          서비스 소개 (만든 사람, 작동 원리, 개인정보)
+  pages/about.html           → /about          서비스 소개 (만든 사람, 작동 원리, 개인정보 요약)
+  pages/privacy.html         → /privacy        개인정보처리방침 (무엇을 어디에 얼마나 보관하는지)
   static/images/og/{방id}.jpg                  테마별 링크 미리보기 이미지 (1200×630)
   static/sitemap.xml                           위 페이지 전부
 
@@ -181,7 +182,7 @@ def page(title, description, path, image, body, ld, extra_head=''):
     <nav><a href="/themes">테마</a><a href="/about">소개</a></nav></header>
 {body}
   <footer class="foot">
-    <p><a href="/">힐링룸</a> · <a href="/themes">테마 모음</a> · <a href="/about">서비스 소개</a></p>
+    <p><a href="/">힐링룸</a> · <a href="/themes">테마 모음</a> · <a href="/about">서비스 소개</a> · <a href="/privacy">개인정보처리방침</a></p>
     <p>만든 사람 {AUTHOR_NAME} · <a href="{AUTHOR_URL}" rel="author">GitHub</a> · 최종 수정 {TODAY}</p>
   </footer>
 </body>
@@ -343,9 +344,10 @@ def about():
 
     <h2>개인정보</h2>
     <ul>
-      <li>회원가입·로그인이 없고, 브라우저마다 무작위 방문자 번호를 만들어 이 브라우저에만 저장해요.</li>
-      <li>접속자 목록에는 닉네임과 IP 앞부분만(예: 203.0.*.*) 보여요. IP 는 저장하지 않고 접속해 있는 동안 서버 메모리에만 둬요.</li>
+      <li>회원가입·로그인이 없어요. 이름, 이메일, 전화번호를 받지 않아요. 브라우저마다 무작위 방문자 번호를 만들어 구분해요.</li>
+      <li>접속자 목록에는 닉네임과 IP 앞부분만(예: 203.0.*.*) 보여요. 앱은 IP 를 저장하지 않고, 서버 접속 기록에만 14일 남아요.</li>
       <li>채팅은 방마다 최근 100개만 보관하고, 사용자가 만든 방은 닫힐 때 함께 지워요.</li>
+      <li>자세한 내용은 <a href="/privacy">개인정보처리방침</a>에 있어요.</li>
     </ul>
 
     <h2>만든 사람</h2>
@@ -362,8 +364,91 @@ def about():
     write_page('about.html', page(title, description, path, '/images/og-cat.jpg', body, ld))
 
 
+PRIVACY_SINCE = '2026-10-16'  # 내용을 바꾸면 날짜를 새로 적고, 아래 "바뀐 내용" 에 한 줄 남긴다
+
+
+def privacy():
+    path = '/privacy'
+    title = '개인정보처리방침 · 힐링룸'
+    description = '힐링룸이 어떤 정보를 어디에 얼마나 보관하는지, 다른 사람에게 무엇이 보이는지, 지우려면 어떻게 하는지 정리했어요.'
+    rows = [
+        ('방문자 번호 (무작위 문자열)', '같은 사람인지 구분 (방장, 투표, 내보내기, 도배 방지)', '브라우저 저장소·쿠키 hr_vid', '쿠키 400일, 직접 지울 때까지'),
+        ('신청한 곡과 방문자 번호', '지난 신청곡, 넘기기 투표, 곡 추천', '서버 DB', '계속 (기록 초기화 때 삭제)'),
+        ('방을 만든 사람의 방문자 번호', '한 사람이 방을 너무 많이 열지 못하게', '서버 DB', '계속'),
+        ('채팅 메시지, 닉네임', '방 채팅', '서버 Redis', '최근 100개. 기본 방은 마지막 메시지 후 24시간, 사용자 방은 닫힐 때(늦어도 7일)'),
+        ('보낸 의견과 방문자 번호', '서비스 개선', '서버 DB', '운영자가 지울 때까지'),
+        ('접속 IP 주소', '접속자 목록(앞부분만), 장난 대응, 위조 방지', '서버 메모리', '접속해 있는 동안만'),
+        ('접속 IP 주소, 접속 시각, 브라우저 정보', '서버 오류·공격 확인', '웹 서버(nginx) 접속 기록', '14일'),
+    ]
+    local = [('chatNickname', '채팅 닉네임'), ('myRequests', '내가 신청한 곡 기록(최대 100곡, 내 추천에만 사용)'),
+             ('musicOn · ambientOn · musicVolume', '소리 켜기·끄기, 음량'), ('musicView · chatCollapsed', '음악 창 크기, 채팅 창 접기')]
+    body = f"""  <main class="content">
+    <h1>개인정보처리방침</h1>
+    <p class="lead">힐링룸은 회원가입과 로그인이 없어요. <b>이름, 이메일, 전화번호, 생년월일 같은 정보는 받지 않아요.</b> 그래도 서비스를 돌리려면 남는 정보가 있어서, 무엇을 어디에 얼마나 두는지 모두 적어 둬요.</p>
+
+    <h2>1. 보관하는 정보</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>무엇</th><th>왜</th><th>어디에</th><th>얼마나</th></tr></thead>
+      <tbody>{''.join(f'<tr><td>{esc(a)}</td><td>{esc(b)}</td><td>{esc(c)}</td><td>{esc(d)}</td></tr>' for a, b, c, d in rows)}</tbody>
+    </table></div>
+    <p>방문자 번호는 브라우저마다 무작위로 만든 값이라 그것만으로는 누구인지 알 수 없어요. 광고나 방문 분석 도구는 쓰지 않아요.</p>
+
+    <h2>2. 다른 사람에게 보이는 것</h2>
+    <ul>
+      <li>같은 방 사람에게: 닉네임, IP 앞부분(예: 203.0.*.*), 들어온 지 얼마나 됐는지, 방장 표시, 채팅 메시지</li>
+      <li>방문자 번호와 전체 IP 는 다른 방문자에게 보이지 않아요. 전체 IP 는 장난·공격 대응을 위해 운영자만 볼 수 있어요.</li>
+    </ul>
+
+    <h2>3. 브라우저에 저장하는 것</h2>
+    <p>아래 값은 서버가 아니라 <b>내 브라우저</b>에만 있어요. 브라우저의 사이트 데이터 삭제로 언제든 지울 수 있어요.</p>
+    <ul>
+      <li><b>hr_vid</b> (쿠키), <b>visitorId</b> (저장소): 방문자 번호</li>
+      {''.join(f'<li><b>{esc(k)}</b>: {esc(v)}</li>' for k, v in local)}
+    </ul>
+
+    <h2>4. 함께 쓰는 외부 서비스</h2>
+    <ul>
+      <li><b>YouTube (Google)</b>: 음악은 YouTube 플레이어로 재생해요. 재생할 때 Google 이 자체 쿠키 등으로 정보를 모을 수 있고, 이는 <a href="https://policies.google.com/privacy?hl=ko" rel="noopener">Google 개인정보처리방침</a>을 따라요. 노래를 검색하면 검색어만 YouTube 로 보내요(방문자 정보는 보내지 않음).</li>
+      <li><b>카카오페이</b>: 서버비 후원 버튼의 QR 이나 링크를 직접 눌렀을 때만 카카오페이로 이동해요.</li>
+      <li>그 밖에 다른 회사에 정보를 주거나 팔지 않아요.</li>
+    </ul>
+
+    <h2>5. 지우고 싶을 때</h2>
+    <ul>
+      <li>내 브라우저에 있는 정보: 브라우저 설정에서 이 사이트의 쿠키·사이트 데이터를 지우면 돼요.</li>
+      <li>서버에 남은 채팅·의견·신청곡 기록: 첫 화면 아래 <b>의견 보내기</b>나 아래 연락처로 방 이름, 대략의 시각, 내용을 알려 주면 찾아서 지워요.</li>
+    </ul>
+
+    <h2>6. 안전하게 지키는 방법</h2>
+    <ul>
+      <li>모든 연결은 HTTPS 로 암호화해요.</li>
+      <li>DB 와 Redis 는 비밀번호가 있는 이 서비스 전용 계정으로만 쓰고, 운영자 화면은 로그인과 관리자 키 두 단계로 잠가 둬요.</li>
+      <li>채팅·의견은 글자 그대로만 보여 주고 HTML 로 해석하지 않아요.</li>
+    </ul>
+
+    <h2>7. 만 14세 미만</h2>
+    <p>나이를 묻거나 아동의 개인정보를 따로 모으지 않아요.</p>
+
+    <h2>8. 운영자와 연락처</h2>
+    <p>개인정보 보호 책임자: <b>{AUTHOR_NAME}</b> (개인 운영)<br>
+      연락: 첫 화면 아래 <b>의견 보내기</b> 또는 <a href="{AUTHOR_URL}" rel="author">GitHub</a></p>
+
+    <h2>9. 바뀐 내용</h2>
+    <ul>
+      <li>{PRIVACY_SINCE} 처음 만들고 시행</li>
+    </ul>
+
+    <p><a class="cta" href="/">힐링룸 들어가기 →</a></p>
+  </main>"""
+    ld = {'@context': 'https://schema.org', '@graph': [
+        {'@type': 'WebPage', 'url': f'{SITE}{path}', 'name': title, 'description': description, 'inLanguage': 'ko-KR',
+         'dateModified': PRIVACY_SINCE, 'isPartOf': {'@id': f'{SITE}/#website'}},
+        crumbs(('힐링룸', '/'), ('개인정보처리방침', path))]}
+    write_page('privacy.html', page(title, description, path, '/images/og-cat.jpg', body, ld))
+
+
 def sitemap():
-    urls = [('/', '1.0', 'weekly'), ('/themes', '0.9', 'weekly'), ('/about', '0.6', 'monthly')]
+    urls = [('/', '1.0', 'weekly'), ('/themes', '0.9', 'weekly'), ('/about', '0.6', 'monthly'), ('/privacy', '0.3', 'yearly')]
     urls += [(f'/themes/{t["room"]}', '0.8', 'monthly') for t in THEMES]
     urls += [('/llms.txt', '0.3', 'monthly')]
     body = '\n'.join(f'''  <url>
@@ -401,4 +486,5 @@ if __name__ == '__main__':
         theme_page(theme)
     themes_index()
     about()
+    privacy()
     sitemap()

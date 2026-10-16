@@ -22,7 +22,7 @@
 - 곡 추천: 내 신청 기록(브라우저), YouTube에서 찾은 비슷한 영상(API 키 필요), 함께 신청된 곡, 테마 인기곡.
 - 영상 자막은 끕니다. 자동 추천은 같은 노래의 다른 영상(공식 MV·라이브·가사 영상)을 다시 고르지 않습니다.
 - **접속자 목록**: 방 사람 수와 닉네임, **앞부분만 보이는 IP**(`203.0.*.*`)를 모두에게 보여줍니다. 전체 IP 는 관리자 화면(`/admin`)에서만 봅니다.
-- **주소**: `.html`·`#` 없이 `/{방id}`, `/themes`, `/themes/{방id}`, `/about`, `/admin`. 없거나 닫힌 방·없는 주소는 404 안내 화면(5초 뒤 `/`).
+- **주소**: `.html`·`#` 없이 `/{방id}`, `/themes`, `/themes/{방id}`, `/about`, `/privacy`, `/admin`. 없거나 닫힌 방·없는 주소는 404 안내 화면(5초 뒤 `/`).
 - **의견 보내기**: 로비 맨 아래에서 익명으로(관리자 화면에서만 읽음). **서버비 후원**: 위쪽 가운데 ☕ 버튼(카카오페이 QR).
 - **방 채팅**: 닉네임은 자동으로 붙고("졸린 고양이" 같은) 바꿀 수 있습니다(브라우저에 저장). 메시지는 Redis에 방마다 최근 100개를 보관하고, 사용자 방은 닫힐 때 지우며 기본 방은 최근 24시간만 보여줍니다.
 
@@ -129,7 +129,7 @@
    src/main/resources/
       ├─ application.properties
       ├─ pages/                     ← SiteController 가 깔끔한 주소로 보여주는 페이지 (정적 파일로 바로 나가지 않음)
-      │                               themes/{방id}.html·themes/index.html·about.html (seo_pages.py 결과물), admin.html, admin-login.html
+      │                               themes/{방id}.html·themes/index.html·about.html·privacy.html (seo_pages.py 결과물), admin.html, admin-login.html
       └─ static/                    ← 프론트엔드 (서버가 그대로 서빙)
          ├─ index.html (링크 미리보기 og 메타 태그 포함), favicon.ico, css/style.css
          ├─ images/                 테마 배경(webp), 마스코트(mascot*.webp), og-cat.jpg·og/{방id}.jpg(링크 미리보기 1200×630), 아이콘, support-qr.png
@@ -289,7 +289,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 |---|---|
 | `/` | `static/index.html` (스프링 기본 첫 화면) |
 | `/{방id}` (`[a-z0-9][a-z0-9-]{0,11}`) | 열린 방이면 `static/index.html`(화면이 주소를 보고 입장), 아니면 404 |
-| `/about`, `/themes`, `/themes/{방id}` | `pages/` 의 소개 페이지 (없으면 404) |
+| `/about`, `/privacy`, `/themes`, `/themes/{방id}` | `pages/` 의 소개 페이지·개인정보처리방침 (없으면 404) |
 | `/admin` | 로그인 전 `pages/admin-login.html`, 로그인 후 `pages/admin.html`. 로그인 설정이 없으면 404 |
 | `/about.html`, `/admin.html`, `/themes/index.html`, `/themes/{id}.html` | 301 로 새 주소 (`/index.html` 은 넣지 않음: 스프링이 `/` 를 보여줄 때 안에서 넘기므로 무한 이동) |
 
@@ -374,7 +374,9 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 브라우저 저장소(localStorage)는 `api.js`의 `store`를 쓰세요(실패해도 무시).
 - **방 만들기 창 등 `.dialog`** 는 화면보다 길면 창 안에서 스크롤하고 `.dialog-actions`(취소·만들기)는 아래에 붙어 있습니다(휴대폰). 휴대폰에서 테마 선택은 3칸·짧은 이름.
 - 로비 방 카드는 한 쪽(page)에 6·4·2개(`lobby.js` `pageSize`, CSS `.room-page` 열 수와 맞춤), 좌우 버튼으로 넘깁니다.
-- **소개 페이지(SEO/AEO/GEO)**: `resources/pages/themes/{기본 방 id}.html`(테마 10개), `pages/themes/index.html`, `pages/about.html`, `static/images/og/{id}.jpg`, `static/sitemap.xml` 은 **`scripts/seo_pages.py` 로 만든 결과물**입니다. 직접 고치지 말고 스크립트의 `THEMES` 등을 고친 뒤 `python scripts/seo_pages.py` 로 다시 만들어 함께 커밋하세요(Pillow·맑은 고딕 필요). 주소는 `.html` 없이 `SiteController` 가 보여줍니다(`/about`, `/themes`, `/themes/cafe`). 테마를 추가하면 스크립트와 `llms.txt` 에도 넣습니다.
+- **소개 페이지(SEO/AEO/GEO)**: `resources/pages/themes/{기본 방 id}.html`(테마 10개), `pages/themes/index.html`, `pages/about.html`, `pages/privacy.html`, `static/images/og/{id}.jpg`, `static/sitemap.xml` 은 **`scripts/seo_pages.py` 로 만든 결과물**입니다. 직접 고치지 말고 스크립트의 `THEMES` 등을 고친 뒤 `python scripts/seo_pages.py` 로 다시 만들어 함께 커밋하세요(Pillow·맑은 고딕 필요). 주소는 `.html` 없이 `SiteController` 가 보여줍니다(`/about`, `/themes`, `/themes/cafe`). 테마를 추가하면 스크립트와 `llms.txt` 에도 넣습니다.
+- **개인정보처리방침**(`/privacy`, `seo_pages.py` 의 `privacy()`): 저장하는 정보(DB 칼럼, Redis 키, 쿠키·localStorage 키, 로그)나 외부 서비스를 추가·변경하면 **이 페이지의 표도 함께 고치고** `PRIVACY_SINCE` 날짜와 "바뀐 내용"을 갱신하세요. 확인하지 않은 보안 주장은 쓰지 않습니다.
+- 로비·소개 페이지 맨 아래 footer 에 만든 사람(김성민, GitHub 프로필)과 개인정보처리방침 링크가 있습니다. 구조화 데이터에는 `Person`(`#author`)으로 들어갑니다.
 - **검색·AI 노출(SEO/AEO)**: `index.html` 의 og 메타 태그·JSON-LD(WebSite, WebApplication, FAQPage), 로비 아래 소개·자주 묻는 질문(`.about`), `robots.txt`·`sitemap.xml`·`llms.txt`. **FAQ 를 바꾸면 JSON-LD 의 FAQPage 도 같은 내용으로** 바꾸고, 기능이 바뀌면 `llms.txt` 도 고치세요. 테마를 추가하면 `.about-themes` 와 JSON-LD `featureList` 에도 넣습니다.
 - **소리는 음악과 환경음을 따로 켜고 끕니다** (`app.js`의 `setMusic`, `setAmbient`).
   - 음악이 소리를 내며 재생되기 시작하면 환경음을 자동으로 끄고("환경음 쉬는 중"), 음악을 끄거나 멈추면 자동으로 껐던 환경음만 다시 켭니다. 곡 사이 잠깐 끊김에 깜빡이지 않도록 멈춤은 4초 기다렸다 알립니다(`music.js`의 `onMusicAudible`).
@@ -444,6 +446,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - [x] 의견 보내기(V9), 관리자 로그인 + 관리자 키, 서버비 후원 버튼
 - [x] 방장·관리자 내보내기 (10분 재입장 금지, 슬픈 고양이 창), 방문자 id 쿠키 함께 저장
 - [x] 방장의 방 설정 바꾸기(이름·테마·최대 인원)·방 닫기, 방 만들 때 최대 인원(V11)
+- [x] 만든 사람 footer, 개인정보처리방침(`/privacy`)
 - [x] 관리자 방 관리 (모든 방의 이름·테마·최대 인원 바꾸기, 방 없애기. 기본 방은 이름·최대 인원만)
 - [ ] 테마별 배경 영상 (선택)
 - 방문자 로그인은 **만들지 않습니다** (익명 서비스). 로그인은 관리자 화면에만 있습니다.

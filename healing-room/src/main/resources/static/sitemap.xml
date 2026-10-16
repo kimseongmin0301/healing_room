@@ -20,6 +20,12 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://healing.kimseongmin.co.kr/privacy</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://healing.kimseongmin.co.kr/themes/cabin</loc>
     <lastmod>2026-10-16</lastmod>
     <changefreq>monthly</changefreq>

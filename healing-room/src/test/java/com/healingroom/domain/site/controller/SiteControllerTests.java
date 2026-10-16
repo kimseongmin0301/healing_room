@@ -65,6 +65,7 @@ class SiteControllerTests {
     @Test
     void pagesWithoutHtmlExtension() throws Exception {
         mvc.perform(get("/about")).andExpect(status().isOk()).andExpect(content().string(containsString("힐링룸 소개")));
+        mvc.perform(get("/privacy")).andExpect(status().isOk()).andExpect(content().string(containsString("개인정보처리방침")));
         mvc.perform(get("/themes")).andExpect(status().isOk()).andExpect(content().string(containsString("테마 모음")));
         mvc.perform(get("/themes/cafe")).andExpect(status().isOk()).andExpect(content().string(containsString("카페멍")));
     }

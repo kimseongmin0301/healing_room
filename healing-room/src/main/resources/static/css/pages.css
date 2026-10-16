@@ -21,6 +21,10 @@ h1 { margin: 6px 0 14px; font-size: clamp(28px, 5vw, 44px); line-height: 1.25; }
 .content { max-width: 1000px; margin: 0 auto; padding: 32px 20px 40px; }
 .content section { margin-bottom: 34px; }
 h2 { margin: 0 0 10px; font-size: 20px; }
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+.table-wrap table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 14px; }
+.table-wrap th, .table-wrap td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid rgba(255, 255, 255, .12); color: #e6e0d6; }
+.table-wrap th { color: #a9a197; font-weight: 500; font-size: 13px; }
 .content ul, .content ol { padding-left: 20px; color: #e6e0d6; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 !important; list-style: none; }
 .chips li { padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; }
