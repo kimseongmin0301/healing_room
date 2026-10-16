@@ -1,4 +1,7 @@
 // 함께 있는 사람 목록: 방 이름 아래 "👥 함께 있는 사람" 버튼을 누르면 펼쳐진다. IP 는 서버가 앞부분만 보내준다
+// 방장에게는 다른 사람 옆에 "내보내기" 버튼이 보인다 (사람은 방문자 id 가 아닌 가린 key 로 가리킨다)
+import { api } from './api.js';
+
 const $ = id => document.getElementById(id);
 
 function since(ms) {
@@ -15,8 +18,21 @@ function toggle(open = $('people').hidden) {
 
 $('presence-toggle').addEventListener('click', () => toggle());
 
+async function kick(roomId, person, button) {
+  if (!confirm(`'${person.nickname}'님을 이 방에서 내보낼까요?
+10분 동안 이 방에 다시 들어올 수 없어요.`)) return;
+  button.disabled = true;
+  try {
+    await api('POST', `/api/rooms/${encodeURIComponent(roomId)}/kick`, { key: person.key });
+  } catch (e) {
+    alert(e.message);
+    button.disabled = false;
+  }
+}
+
 /** 서버가 보낸 접속자 목록 (type=presence) */
-export function renderPeople({ count, people }) {
+export function renderPeople({ count, people }, roomId) {
+  const iAmHost = people.some(p => p.me && p.host);
   $('people-count').textContent = count;
   $('people-chip-count').textContent = count;
   $('people-list').replaceChildren(...people.map(person => {
@@ -29,6 +45,11 @@ export function renderPeople({ count, people }) {
     const ip = Object.assign(document.createElement('span'), { className: 'ip', textContent: person.ip });
     const time = Object.assign(document.createElement('span'), { className: 'since', textContent: since(person.joinedAt) });
     li.append(name, ip, time);
+    if (iAmHost && !person.me) {
+      const button = Object.assign(document.createElement('button'), { className: 'kick', type: 'button', textContent: '내보내기' });
+      button.onclick = () => kick(roomId, person, button);
+      li.append(button);
+    }
     return li;
   }));
 }

@@ -105,6 +105,16 @@ body:not(.in-room) canvas { display: none; }
 .brand { display: flex; align-items: center; gap: 14px; }
 .brand img { flex: none; width: 72px; height: auto; filter: drop-shadow(0 4px 12px rgba(0, 0, 0, .35)); }
 .dialog.support .dialog-actions { justify-content: center; }
+/* 내보내졌을 때 창 (슬픈 고양이) */
+.dialog.kicked { width: min(340px, 100%); text-align: center; }
+.dialog.kicked img { display: block; width: 140px; height: auto; margin: -6px auto 8px; filter: grayscale(.25); }
+.dialog.kicked .dialog-actions { justify-content: center; }
+/* 접속자 목록의 내보내기 버튼 (방장에게만) */
+.people-list .kick {
+  margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 11px; cursor: pointer;
+  color: var(--muted); background: none; border: 1px solid var(--line);
+}
+.people-list .kick:hover { color: var(--text); border-color: rgba(255, 120, 120, .6); }
 .dialog.support a.btn { text-decoration: none; }
 @media (max-width: 700px) {
   .support-chip span { display: none; } /* 좁은 화면에서는 ☕ 만 */

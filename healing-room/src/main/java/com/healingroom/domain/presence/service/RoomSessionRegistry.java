@@ -1,7 +1,12 @@
 package com.healingroom.domain.presence.service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,7 +53,62 @@ public class RoomSessionRegistry {
     // roomId → (visitorId → 처음 들어온 시각 ms, 닉네임)
     private final Map<String, Map<String, Long>> joinedAt = new ConcurrentHashMap<>();
     private final Map<String, Map<String, String>> nicknames = new ConcurrentHashMap<>();
+    // roomId → (visitorId → 다시 들어올 수 있는 시각 ms). 내보내진 사람
+    private final Map<String, Map<String, Long>> bans = new ConcurrentHashMap<>();
     private final AtomicLong sequence = new AtomicLong();
+    // 접속자 목록에 쓰는 가린 키를 만들 때 섞는 값 (서버를 다시 켜면 바뀐다)
+    private final byte[] keySalt = new byte[16];
+
+    {
+        new SecureRandom().nextBytes(keySalt);
+    }
+
+    /**
+     * 접속자 목록에서 사람을 가리키는 키. 방문자 id 를 밖에 내보내지 않기 위해, 방·방문자로 만든 되돌릴 수 없는 짧은 값을 쓴다.
+     * 같은 방·같은 사람이면 늘 같다 (서버를 다시 켜기 전까지)
+     */
+    public String keyOf(String roomId, String visitorId) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(keySalt);
+            digest.update((roomId + '\n' + visitorId).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest.digest(), 0, 8);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** 키로 지금 방에 있는 사람의 방문자 id 를 찾는다 */
+    public Optional<String> visitorByKey(String roomId, String key) {
+        return visitors(roomId).stream().filter(visitor -> keyOf(roomId, visitor).equals(key)).findFirst();
+    }
+
+    /** 그 방문자의 연결(탭)들 */
+    public List<WebSocketSession> sessionsOf(String roomId, String visitorId) {
+        return connections(roomId).stream().filter(c -> c.visitorId().equals(visitorId)).map(Connection::session).toList();
+    }
+
+    /** 내보내기: 정해진 시간 동안 이 방에 다시 못 들어오게 하고, 다시 들어오면 맨 뒤 순서가 되게 들어온 순서를 지운다 */
+    public synchronized void ban(String roomId, String visitorId, long untilMs) {
+        bans.computeIfAbsent(roomId, id -> new ConcurrentHashMap<>()).put(visitorId, untilMs);
+        forget(joinOrder, roomId, visitorId);
+        forget(joinedAt, roomId, visitorId);
+        forget(leftAt, roomId, visitorId);
+    }
+
+    /** 아직 다시 들어올 수 없으면 그 시각(ms), 아니면 비어 있다 */
+    public Optional<Long> bannedUntil(String roomId, String visitorId) {
+        Map<String, Long> roomBans = bans.get(roomId);
+        Long until = roomBans == null ? null : roomBans.get(visitorId);
+        if (until == null) {
+            return Optional.empty();
+        }
+        if (until <= System.currentTimeMillis()) {
+            roomBans.remove(visitorId);
+            return Optional.empty();
+        }
+        return Optional.of(until);
+    }
 
     public void add(String roomId, String visitorId, WebSocketSession session) {
         add(roomId, visitorId, session, null, null);

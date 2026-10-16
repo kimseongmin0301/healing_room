@@ -11,7 +11,8 @@ public record AdminPresenceResponse(int totalPeople, List<Room> rooms) {
     /**
      * @param visitor 방문자 id 앞 8자리 (같은 사람이 여러 방·닉네임을 쓰는지 구분용)
      * @param tabs    같은 사람이 연 탭 수
+     * @param key     내보내기에 쓰는 가린 키
      */
-    public record Person(String nickname, String ip, String visitor, boolean host, long joinedAt, int tabs) {
+    public record Person(String key, String nickname, String ip, String visitor, boolean host, long joinedAt, int tabs) {
     }
 }

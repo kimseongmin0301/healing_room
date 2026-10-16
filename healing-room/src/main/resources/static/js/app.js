@@ -97,7 +97,9 @@ async function enterRoom(id) {
     nickname: getNickname,
     onChat: receiveChat,
     onChatClear: clearChat,
-    onPresence: renderPeople,
+    onPresence: people => renderPeople(people, room.id),
+    // 내보내지면 로비로 가서 슬픈 고양이 창을 띄운다 (다시 연결하지 않는다)
+    onKicked: info => { showKicked(info); go('/', { replace: true }); },
     onState: state => {
       applyState(state);
       setPresence(state.listeners);
@@ -111,6 +113,19 @@ async function enterRoom(id) {
     },
   });
 }
+
+/** 내보내졌을 때 창: 누가 내보냈는지, 언제 다시 들어올 수 있는지 */
+function showKicked({ by, until }) {
+  const at = new Date(until).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  $('kicked-title').textContent = by === 'ban' ? '아직 이 방에 들어갈 수 없어요' : '방에서 내보내졌어요';
+  $('kicked-text').textContent = by === 'host' ? `방장이 이 방에서 내보냈어요. ${at} 이후에 다시 들어올 수 있어요.`
+    : by === 'admin' ? `관리자가 이 방에서 내보냈어요. ${at} 이후에 다시 들어올 수 있어요.`
+    : `얼마 전에 이 방에서 내보내졌어요. ${at} 이후에 다시 와 주세요.`;
+  $('kicked-dialog').hidden = false;
+  $('kicked-ok').focus();
+}
+$('kicked-ok').onclick = () => { $('kicked-dialog').hidden = true; };
+$('kicked-dialog').addEventListener('click', e => { if (e.target === $('kicked-dialog')) $('kicked-dialog').hidden = true; });
 
 function leaveRoom() {
   socket?.close();

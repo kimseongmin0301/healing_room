@@ -43,6 +43,17 @@ class AdminControllerTests {
     @MockitoBean
     AdminLoginService loginService;
 
+    @MockitoBean
+    com.healingroom.domain.presence.service.KickService kickService;
+
+    @Test
+    void adminKicks() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/admin/kick")
+                        .param("roomId", "sea").param("key", "k1").header("X-Admin-Token", "secret"))
+                .andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(kickService).kickByAdmin("sea", "k1");
+    }
+
     @Test
     void loginSetsSafeCookie() throws Exception {
         given(loginService.login(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq("owner"),
@@ -144,7 +155,7 @@ class AdminControllerTests {
     void showsFullIpToAdmin() throws Exception {
         given(adminService.presence()).willReturn(new AdminPresenceResponse(1, List.of(
                 new AdminPresenceResponse.Room("sea", "바다멍", 1, List.of(
-                        new AdminPresenceResponse.Person("졸린 고양이", "203.0.113.10", "3f1c2a9e", true, 1L, 1))))));
+                        new AdminPresenceResponse.Person("k1", "졸린 고양이", "203.0.113.10", "3f1c2a9e", true, 1L, 1))))));
 
         mvc.perform(get("/api/admin/presence").header("X-Admin-Token", "secret"))
                 .andExpect(status().isOk())

@@ -25,6 +25,7 @@ import com.healingroom.domain.admin.service.AdminLoginService;
 import com.healingroom.domain.admin.service.AdminService;
 import com.healingroom.domain.feedback.dto.FeedbackResponse;
 import com.healingroom.domain.feedback.service.FeedbackService;
+import com.healingroom.domain.presence.service.KickService;
 import com.healingroom.domain.room.service.RoomResetService;
 import com.healingroom.global.util.ClientRequest;
 
@@ -43,13 +44,15 @@ public class AdminController {
     private final AdminLoginService loginService;
     private final RoomResetService resetService;
     private final FeedbackService feedbackService;
+    private final KickService kickService;
 
-    public AdminController(AdminService adminService, AdminLoginService loginService,
-                           RoomResetService resetService, FeedbackService feedbackService) {
+    public AdminController(AdminService adminService, AdminLoginService loginService, RoomResetService resetService,
+                           FeedbackService feedbackService, KickService kickService) {
         this.adminService = adminService;
         this.loginService = loginService;
         this.resetService = resetService;
         this.feedbackService = feedbackService;
+        this.kickService = kickService;
     }
 
     // ---------------------------------------------------------------- 로그인
@@ -107,6 +110,16 @@ public class AdminController {
                                @PathVariable long id) {
         authorize(session, token);
         feedbackService.delete(id);
+    }
+
+    /** 방에서 내보내기 (10분 동안 다시 못 들어옴). key 는 접속자 목록의 가린 키 */
+    @PostMapping("/kick")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void kick(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                     @RequestHeader(value = TOKEN, required = false) String token,
+                     @RequestParam String roomId, @RequestParam String key) {
+        authorize(session, token);
+        kickService.kickByAdmin(roomId, key);
     }
 
     /** 모든 방의 접속자 (닉네임, 전체 IP, 접속 시각) */

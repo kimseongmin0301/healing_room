@@ -25,6 +25,15 @@ async function reset(roomId) {
   load();
 }
 
+async function kick(roomId, person) {
+  if (!confirm(`'${person.nickname}'님을 '${roomId}' 방에서 내보낼까요? 10분 동안 다시 못 들어와요.`)) return;
+  const url = `/api/admin/kick?roomId=${encodeURIComponent(roomId)}&key=${encodeURIComponent(person.key)}`;
+  const res = await fetch(url, { method: 'POST', headers: { 'X-Admin-Token': getToken() } });
+  $('status').textContent = res.ok ? `'${person.nickname}'님을 내보냈어요.`
+    : ((await res.json().catch(() => null))?.message ?? `내보내지 못했어요 (${res.status})`);
+  load();
+}
+
 function render({ totalPeople, rooms }) {
   $('status').textContent = `총 ${totalPeople}명 · ${new Date().toLocaleTimeString('ko-KR')} 기준`;
   $('rooms').replaceChildren(...rooms.map(room => {
@@ -37,12 +46,17 @@ function render({ totalPeople, rooms }) {
     resetButton.onclick = () => reset(room.id);
     h2.append(resetButton);
     const table = document.createElement('table');
-    table.innerHTML = '<thead><tr><th>닉네임</th><th>IP</th><th>방문자</th><th>들어온 시각</th><th>탭</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th>닉네임</th><th>IP</th><th>방문자</th><th>들어온 시각</th><th>탭</th><th></th></tr></thead>';
     const body = document.createElement('tbody');
     for (const p of room.people) {
       const tr = document.createElement('tr');
+      // 내보내기: 10분 동안 이 방에 다시 못 들어온다
+      const kickButton = Object.assign(document.createElement('button'), { className: 'btn', type: 'button', textContent: '내보내기' });
+      kickButton.onclick = () => kick(room.id, p);
+      const action = document.createElement('td');
+      action.append(kickButton);
       tr.append(cell(`${p.host ? '👑 ' : ''}${p.nickname}`), cell(p.ip ?? '-', 'mono'), cell(p.visitor, 'mono'),
-        cell(timeText(p.joinedAt)), cell(String(p.tabs)));
+        cell(timeText(p.joinedAt)), cell(String(p.tabs)), action);
       body.append(tr);
     }
     table.append(body);

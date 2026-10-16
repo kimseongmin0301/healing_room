@@ -17,6 +17,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import com.healingroom.domain.chat.service.ChatPolicy;
 import com.healingroom.domain.presence.dto.PresencePush;
+import com.healingroom.domain.presence.service.KickService;
 import com.healingroom.domain.presence.service.RoomBroadcaster;
 import com.healingroom.domain.presence.service.RoomSessionRegistry;
 import com.healingroom.domain.queue.dto.PlayerState;
@@ -31,7 +32,8 @@ import tools.jackson.databind.json.JsonMapper;
  * /ws/rooms/{roomId}?visitorId={uuid}&nickname={닉네임}
  *
  * <p>방에 들어오면 연결하고, 연결돼 있는 동안 "방에 있는 사람"으로 센다.
- * 서버 → 브라우저: 음악 상태({@link PlayerState}, type=state), 채팅(type=chat), 접속자 목록({@link PresencePush}, type=presence).
+ * 서버 → 브라우저: 음악 상태({@link PlayerState}, type=state), 채팅(type=chat), 접속자 목록({@link PresencePush}, type=presence),
+ * 내보내짐(type=kicked, 그 뒤 4001 로 끊김 → 화면은 다시 연결하지 않는다).
  * 브라우저 → 서버: 연결 유지용 "ping", 닉네임 변경 {"type":"nickname","nickname":"..."}. 그 밖의 동작은 REST API 로 받는다.
  */
 @Component
@@ -45,14 +47,16 @@ public class RoomSocketHandler extends TextWebSocketHandler {
     private final RoomBroadcaster broadcaster;
     private final RoomService roomService;
     private final QueueService queueService;
+    private final KickService kickService;
     private final JsonMapper json;
 
     public RoomSocketHandler(RoomSessionRegistry sessions, RoomBroadcaster broadcaster, RoomService roomService,
-                             QueueService queueService, JsonMapper json) {
+                             QueueService queueService, KickService kickService, JsonMapper json) {
         this.sessions = sessions;
         this.broadcaster = broadcaster;
         this.roomService = roomService;
         this.queueService = queueService;
+        this.kickService = kickService;
         this.json = json;
     }
 
@@ -67,6 +71,12 @@ public class RoomSocketHandler extends TextWebSocketHandler {
 
         if (!isUuid(visitorId) || !roomService.isOpen(roomId)) {
             raw.close(CloseStatus.POLICY_VIOLATION);
+            return;
+        }
+        // 내보내진 지 10분이 안 됐으면 들어오지 못하게 알리고 끊는다
+        var bannedUntil = sessions.bannedUntil(roomId, visitorId);
+        if (bannedUntil.isPresent()) {
+            kickService.refuse(raw, bannedUntil.get());
             return;
         }
         // 여러 스레드(스케줄러, 요청 스레드, Redis 구독)에서 동시에 보내도 안전하도록 감싼다
@@ -117,7 +127,8 @@ public class RoomSocketHandler extends TextWebSocketHandler {
     private void broadcastPresence(String roomId) {
         var participants = sessions.participants(roomId);
         String hostId = sessions.host(roomId).orElse(null);
-        broadcaster.send(roomId, viewerId -> PresencePush.of(participants, hostId, viewerId));
+        broadcaster.send(roomId, viewerId -> PresencePush.of(participants, hostId, viewerId,
+                visitor -> sessions.keyOf(roomId, visitor)));
     }
 
     private static String decode(String value) {

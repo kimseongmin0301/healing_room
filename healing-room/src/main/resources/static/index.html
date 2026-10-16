@@ -92,6 +92,16 @@
 <body>
   <canvas id="scene"></canvas>
 
+  <!-- 방에서 내보내졌을 때 (로비로 이동한 뒤 띄움). 슬픈 고양이 그림은 images/mascot-sad.webp 를 바꾸면 된다 -->
+  <div id="kicked-dialog" class="dialog-backdrop" hidden>
+    <div class="dialog panel kicked" role="alertdialog" aria-labelledby="kicked-title" aria-describedby="kicked-text">
+      <img src="/images/mascot-sad.webp" alt="슬퍼하는 고양이" width="140" height="140">
+      <h2 id="kicked-title">방에서 내보내졌어요</h2>
+      <p id="kicked-text" class="hint-text"></p>
+      <div class="dialog-actions"><button id="kicked-ok" class="btn primary" type="button">알겠어요</button></div>
+    </div>
+  </div>
+
   <!-- 서버비 후원: 로비·방 어디서나 위쪽 가운데에 작게. 누르면 카카오페이 QR -->
   <button id="support-open" class="support-chip" type="button" title="서버비 후원하기">☕ <span>서버비 후원</span></button>
   <div id="support-dialog" class="dialog-backdrop" hidden>

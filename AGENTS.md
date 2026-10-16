@@ -109,12 +109,15 @@
       │  │  │                       AdminService (관리자 키 확인, 모든 방 접속자·전체 IP)
       │  │  ├─ dto/                 AdminLoginRequest, AdminPresenceResponse
       │  │  └─ exception/           AdminException (설정 없음 404, 키·로그인 틀림 401, 잠금 429)
-      │  └─ presence/               ← 방 접속(누가 어느 방에 있는지, 방장, 닉네임, IP)
+      │  └─ presence/               ← 방 접속(누가 어느 방에 있는지, 방장, 닉네임, IP), 내보내기
+      │     ├─ controller/          KickController           POST /api/rooms/{roomId}/kick (방장)
+      │     ├─ exception/           PresenceException
       │     ├─ handler/             RoomSocketHandler (WebSocket 연결/해제, 상태·접속자 전송, 닉네임 변경 수신),
       │     │                       ClientIpHandshakeInterceptor (nginx 뒤에서 X-Forwarded-For 로 실제 IP)
       │     ├─ dto/                 PresencePush (type=presence, 가린 IP)
       │     ├─ util/                IpMask (203.0.*.*)
-      │     └─ service/             RoomSessionRegistry (방별 접속자·들어온 순서·방장, 메모리), RoomBroadcaster (방 사람들에게 각자 기준으로 전송)
+      │     └─ service/             RoomSessionRegistry (방별 접속자·들어온 순서·방장·가린 키·내보낸 사람, 메모리), RoomBroadcaster (방 사람들에게 각자 기준으로 전송),
+      │                             KickService (방장·관리자 내보내기, 10분 재입장 금지, kicked 알림 후 4001 로 끊기)
       └─ global/
          ├─ config/                 WebSocketConfig, RedisConfig (채팅 pub/sub 구독), TextFileCharsetFilter (.txt 를 UTF-8 로)
          ├─ util/                   ClientRequest (nginx 뒤에서 실제 IP·https 여부, 루프백에서 온 헤더만 믿음)
@@ -263,6 +266,8 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | POST | `/api/rooms/{roomId}/chat` | 채팅 보내기 `{ "nickname", "text" }` → 201. 10초에 6개 넘으면 429, Redis 장애 시 503 |
 | POST | `/api/rooms/{id}/reset` | **기본 방의 방장** 기록 초기화 (지난 신청곡·투표·통계·채팅) → 204, 아니면 403 |
 | POST | `/api/admin/reset?roomId=` | **관리자** 기록 초기화. roomId 가 없으면 모든 방 + YouTube 검색 캐시 |
+| POST | `/api/rooms/{roomId}/kick` | **방장** 내보내기 `{ "key" }` (접속자 목록의 가린 키) → 204. 방장 아님 403, 없는 사람 404, 자기 자신 400 |
+| POST | `/api/admin/kick?roomId=&key=` | **관리자** 내보내기 (방장 포함 누구나) |
 | POST | `/api/feedback` | 로비 의견 보내기 `{ "message" }` (1~1000자) → 201. 한 브라우저 10분에 3번·사이트 전체 1시간에 60번 넘으면 429 |
 | GET · DELETE | `/api/admin/feedback`, `/api/admin/feedback/{id}` | **관리자** 받은 의견 최근 200개 / 지우기 |
 | POST | `/api/admin/login`, `/api/admin/logout` | 관리자 로그인 `{ username, password }` → 쿠키 `HR_ADMIN`(HttpOnly·Secure·SameSite=Strict, 8시간). 한 IP 5번 틀리면 15분 429 |
@@ -315,6 +320,12 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 비밀번호는 원문을 두지 않고 `ADMIN_PASSWORD_HASH`(`pbkdf2_sha256$반복$소금$해시`, `scripts/admin_password.py`)만. 아이디가 틀려도 해시 계산을 똑같이 해서 걸린 시간으로 아이디를 알 수 없게 합니다.
 - 한 IP(`ClientRequest.ip`) 5번 틀리면 15분 429. 로그인 표·잠금은 서버 메모리라 재시작하면 다시 로그인합니다.
 - `ADMIN_USERNAME`·`ADMIN_PASSWORD_HASH` 가 비면 `/admin` 과 관리자 API 전체가 404, `ADMIN_TOKEN` 이 비면 관리자 API 가 404.
+
+### 내보내기 (KickService)
+- 방장은 자기 방에서(자기 자신 제외), 관리자는 어느 방에서나 내보냅니다. 사람은 **가린 키**(`RoomSessionRegistry.keyOf`: 서버를 켤 때 만든 무작위 값 + 방 + 방문자 id 의 SHA-256 앞 16자)로 가리키고, 방문자 id 는 밖에 내보내지 않습니다.
+- 내보내면 그 사람의 모든 탭에 `{type:"kicked", by:"host"|"admin", until}` 을 보내고 **4001** 로 끊습니다. 화면은 다시 연결하지 않고 `/` 로 가서 슬픈 고양이 창(`#kicked-dialog`, `images/mascot-sad.webp`)을 띄웁니다.
+- **10분 동안 그 방에 다시 못 들어옵니다**(방문자 id 기준, 서버 메모리). 다시 연결하면 `by:"ban"` 알림 후 4001. 들어온 순서도 지워져 다시 오면 맨 뒤(방장 아님)입니다.
+- 방문자 id 는 브라우저 저장소를 지우면 바뀌므로 완벽한 차단은 아닙니다(장난 방지용).
 
 ### 의견 보내기 (FeedbackService)
 - `POST /api/feedback` 익명. 제어 문자 정리, 1~1000자. 한 브라우저(방문자 id) 10분에 3번, 사이트 전체 1시간에 60번(방문자 id 는 바꿀 수 있어 전체 한도도 둠). IP·연락처 저장 안 함.
@@ -413,5 +424,6 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - [x] 검색엔진·AI 노출 (소개 페이지 14개, JSON-LD, sitemap, llms.txt, 링크 미리보기), 마스코트
 - [x] 깔끔한 주소(SiteController), 404·5xx 안내 화면
 - [x] 의견 보내기(V9), 관리자 로그인 + 관리자 키, 서버비 후원 버튼
+- [x] 방장·관리자 내보내기 (10분 재입장 금지, 슬픈 고양이 창)
 - [ ] 테마별 배경 영상 (선택)
 - 방문자 로그인은 **만들지 않습니다** (익명 서비스). 로그인은 관리자 화면에만 있습니다.

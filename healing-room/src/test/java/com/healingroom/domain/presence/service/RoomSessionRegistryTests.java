@@ -78,7 +78,7 @@ class RoomSessionRegistryTests {
         registry.add("room", "A", session(), "203.0.113.10", "졸린 고양이");
         registry.add("room", "B", session(), "121.134.5.6", "따뜻한 장작");
 
-        var push = com.healingroom.domain.presence.dto.PresencePush.of(registry.participants("room"), "A", "B");
+        var push = com.healingroom.domain.presence.dto.PresencePush.of(registry.participants("room"), "A", "B", v -> registry.keyOf("room", v));
         assertThat(push.count()).isEqualTo(2);
         assertThat(push.people().get(0).host()).isTrue();
         assertThat(push.people().get(0).ip()).isEqualTo("203.0.*.*");

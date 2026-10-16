@@ -55,7 +55,7 @@ public class AdminService {
                 .map(roomId -> {
                     String hostId = sessions.host(roomId).orElse(null);
                     List<AdminPresenceResponse.Person> people = sessions.participants(roomId).stream()
-                            .map(p -> new AdminPresenceResponse.Person(p.nickname(), p.ip(),
+                            .map(p -> new AdminPresenceResponse.Person(sessions.keyOf(roomId, p.visitorId()), p.nickname(), p.ip(),
                                     p.visitorId().substring(0, Math.min(8, p.visitorId().length())),
                                     p.visitorId().equals(hostId), p.joinedAt(), p.tabs()))
                             .toList();

@@ -1,8 +1,10 @@
 // 방 WebSocket 연결. 연결돼 있는 동안 "방에 있는 사람"으로 세어지고,
-// 서버가 음악 상태(state), 채팅(chat), 접속자 목록(presence)을 보내준다. 닉네임을 바꾸면 서버에 알린다.
+// 서버가 음악 상태(state), 채팅(chat), 접속자 목록(presence), 내보내짐(kicked)을 보내준다. 닉네임을 바꾸면 서버에 알린다.
 import { visitorId } from './api.js';
 
-export function connectRoom(roomId, { nickname, onState, onChat, onChatClear, onPresence, onStatus }) {
+const KICKED = 4001; // 내보내져서 서버가 끊은 연결 (다시 연결하지 않는다)
+
+export function connectRoom(roomId, { nickname, onState, onChat, onChatClear, onPresence, onStatus, onKicked }) {
   let ws = null;
   let closed = false;
   let retry = 0;
@@ -24,10 +26,11 @@ export function connectRoom(roomId, { nickname, onState, onChat, onChatClear, on
       else if (message.type === 'chat') onChat?.(message.message);
       else if (message.type === 'presence') onPresence?.(message);
       else if (message.type === 'chat-clear') onChatClear?.();
+      else if (message.type === 'kicked') { closed = true; onKicked?.(message); }
     };
-    ws.onclose = () => {
+    ws.onclose = e => {
       clearInterval(pingTimer);
-      if (closed) return;
+      if (closed || e.code === KICKED) return;
       onStatus?.('reconnecting');
       setTimeout(open, Math.min(10000, 1000 * 2 ** retry++));
     };

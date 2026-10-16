@@ -1,6 +1,7 @@
 package com.healingroom.domain.presence.dto;
 
 import java.util.List;
+import java.util.function.Function;
 
 import com.healingroom.domain.presence.service.RoomSessionRegistry;
 import com.healingroom.domain.presence.util.IpMask;
@@ -16,14 +17,16 @@ public record PresencePush(String type, int count, List<Person> people) {
      * @param host     방장인지
      * @param me       받는 사람 본인인지
      * @param joinedAt 들어온 시각(ms)
+     * @param key      이 사람을 가리키는 가린 키 (방장이 내보낼 때 쓴다. 방문자 id 가 아님)
      */
-    public record Person(String nickname, String ip, boolean host, boolean me, long joinedAt) {
+    public record Person(String key, String nickname, String ip, boolean host, boolean me, long joinedAt) {
     }
 
-    public static PresencePush of(List<RoomSessionRegistry.Participant> participants, String hostId, String viewerId) {
+    public static PresencePush of(List<RoomSessionRegistry.Participant> participants, String hostId, String viewerId,
+                                  Function<String, String> keyOf) {
         List<Person> people = participants.stream()
-                .map(p -> new Person(p.nickname(), IpMask.mask(p.ip()), p.visitorId().equals(hostId),
-                        p.visitorId().equals(viewerId), p.joinedAt()))
+                .map(p -> new Person(keyOf.apply(p.visitorId()), p.nickname(), IpMask.mask(p.ip()),
+                        p.visitorId().equals(hostId), p.visitorId().equals(viewerId), p.joinedAt()))
                 .toList();
         return new PresencePush("presence", people.size(), people);
     }
