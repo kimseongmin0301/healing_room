@@ -27,7 +27,13 @@
 - Leave clear open areas where small animations will be added later
   (open sky for stars, air for floating particles, water surfaces, windows for rain)
 - Consistent style across all images: realistic, peaceful, healing atmosphere
+- Generate at the HIGHEST resolution you can. Do NOT make a small image and upscale it.
+  Fine details (stars, leaves, water, city lights) must stay sharp, without blocky or smeared areas
+- Each image must be ONE single clean picture: no borders, no white lines, no frames,
+  and no parts of other images at the edges
 ```
+
+> **저장할 때 주의:** 이미지를 하나씩 **다운로드 버튼**으로 받아 주세요. 화면 캡처나 여러 장이 이어진 화면을 잘라서 저장하면 위아래에 흰 줄이나 다른 그림 조각이 섞여 들어가요.
 
 ---
 
@@ -127,5 +133,7 @@ calm and peaceful.
 - [ ] **사람, 글자, 로고**가 들어가지 않았나요?
 - [ ] **주인공(모닥불, 행성, 시냇물 등)이 가운데**에 있고, 네 모서리는 단순한가요?
 - [ ] 흰 글씨가 잘 보일 만큼 **어두운 톤**인가요?
+- [ ] 크게 확대해도 **뭉개지거나 깍두기처럼 깨지지** 않나요?
+- [ ] 가장자리에 **흰 줄, 테두리, 다른 이미지 조각**이 없나요?
 
 받은 이미지는 `healing-room` 프로젝트 담당자(Claude)에게 전달되어 웹용으로 변환되고, 테마별 움직임 효과·환경음·기본 음악과 함께 새 방으로 추가됩니다.
