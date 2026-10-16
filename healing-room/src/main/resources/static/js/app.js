@@ -150,9 +150,10 @@ function go(path, { replace = false } = {}) {
 }
 
 function route() {
-  // 예전 주소(/#cafe)로 들어오면 새 주소(/cafe)로 바꾼다
+  // 예전 주소(/#cafe)로 들어오면 새 주소(/cafe)로 다시 연다 (서버가 방이 있는지 보고, 없으면 404 화면)
   if (location.hash.length > 1) {
-    history.replaceState(null, '', `/${decodeURIComponent(location.hash.slice(1))}`);
+    location.replace(`/${encodeURIComponent(decodeURIComponent(location.hash.slice(1)))}`);
+    return;
   }
   const id = decodeURIComponent(location.pathname.slice(1));
   if (id) enterRoom(id); else showLobbyView();

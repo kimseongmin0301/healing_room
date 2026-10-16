@@ -14,12 +14,14 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.healingroom.domain.room.service.RoomService;
+
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 화면 주소를 깔끔하게(.html·# 없이) 보여준다.
  * <ul>
- *   <li>방: {@code /cafe}, {@code /ab3k9xqz} → 첫 화면(static/index.html). 화면이 주소를 보고 방에 들어간다</li>
+ *   <li>방: {@code /cafe}, {@code /ab3k9xqz} → 첫 화면(static/index.html). 화면이 주소를 보고 방에 들어간다. 없거나 닫힌 방은 404</li>
  *   <li>소개 페이지: {@code /about}, {@code /themes}, {@code /themes/cafe} → resources/pages/ (scripts/seo_pages.py 로 만듦)</li>
  *   <li>관리자: {@code /admin} → resources/pages/admin.html</li>
  *   <li>예전 주소({@code /about.html}, {@code /themes/cafe.html} 등)는 새 주소로 영구 이동(301) — 검색엔진에 등록된 주소도 넘어오게</li>
@@ -31,8 +33,18 @@ public class SiteController {
 
     private static final MediaType HTML = new MediaType(MediaType.TEXT_HTML, StandardCharsets.UTF_8);
 
+    private final RoomService roomService;
+
+    public SiteController(RoomService roomService) {
+        this.roomService = roomService;
+    }
+
+    /** 열려 있는 방이면 첫 화면, 없거나 닫힌 방이면 404 화면 (그냥 로비로 보내면 주소가 틀렸는지 알 수 없다) */
     @GetMapping("/{roomId:[a-z0-9][a-z0-9-]{0,11}}")
     public ResponseEntity<Resource> room(@PathVariable String roomId) {
+        if (!roomService.isOpen(roomId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
         return html("static/index.html");
     }
 
