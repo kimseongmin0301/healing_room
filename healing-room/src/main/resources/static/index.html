@@ -109,7 +109,13 @@
       <button id="create-open" class="btn primary big">방 만들기</button>
     </header>
     <p id="lobby-msg" class="msg"></p>
-    <div id="room-grid" class="room-grid"></div>
+    <!-- 방 카드: 한 화면에 6개(좁으면 4개·2개)씩, 다음 방들은 옆으로 넘겨 본다 -->
+    <div class="rooms-slider">
+      <button id="rooms-prev" class="slide-btn prev" type="button" aria-label="이전 방들" hidden>‹</button>
+      <div id="room-grid" class="room-pages"></div>
+      <button id="rooms-next" class="slide-btn next" type="button" aria-label="다음 방들" hidden>›</button>
+    </div>
+    <div id="room-dots" class="room-dots" aria-hidden="true"></div>
 
     <!-- 소개·자주 묻는 질문: 사람에게도, 검색엔진·AI(자바스크립트를 실행하지 않는 수집기 포함)에게도 읽히도록 HTML 에 그대로 둔다.
          아래 FAQ 를 바꾸면 <head> 의 JSON-LD(FAQPage)도 같이 바꾼다 -->

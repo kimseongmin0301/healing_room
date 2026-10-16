@@ -106,7 +106,34 @@ body:not(.in-room) canvas { display: none; }
 .theme-option.on { border-color: var(--accent); }
 .hint-text { margin: 4px 0 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-.room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+/* 방 카드 슬라이드: 한 쪽(page)에 6개(3×2), 쪽끼리는 옆으로 넘긴다 */
+.rooms-slider { position: relative; }
+.room-pages {
+  display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth;
+  scrollbar-width: none; overscroll-behavior-x: contain;
+}
+.room-pages::-webkit-scrollbar { display: none; }
+.room-page {
+  flex: 0 0 100%; box-sizing: border-box; scroll-snap-align: start; padding: 2px;
+  display: grid; grid-template-columns: repeat(3, 1fr); align-content: start; gap: 18px;
+}
+.slide-btn {
+  position: absolute; top: 50%; z-index: 2; width: 44px; height: 44px; margin-top: -22px; border-radius: 50%;
+  border: 1px solid var(--line); background: rgba(20, 18, 24, .85); color: var(--text); font-size: 26px; line-height: 1;
+  cursor: pointer; backdrop-filter: blur(6px); box-shadow: 0 4px 16px rgba(0, 0, 0, .4);
+}
+.slide-btn:hover { border-color: rgba(255, 255, 255, .4); }
+.slide-btn.prev { left: -22px; }
+.slide-btn.next { right: -22px; }
+.room-dots { display: flex; justify-content: center; gap: 8px; margin-top: 14px; min-height: 8px; }
+.room-dots span { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .25); }
+.room-dots span.on { background: var(--accent); }
+@media (max-width: 960px) { .room-page { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) {
+  .room-page { grid-template-columns: 1fr; }
+  .slide-btn.prev { left: 4px; }
+  .slide-btn.next { right: 4px; }
+}
 .room-card {
   all: unset; cursor: pointer; position: relative; display: block; aspect-ratio: 16 / 10; border-radius: 18px;
   overflow: hidden; background: #1a1a1f center / cover no-repeat; border: 1px solid var(--line);

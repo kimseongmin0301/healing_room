@@ -3,6 +3,15 @@ import { api, store } from './api.js';
 
 const $ = id => document.getElementById(id);
 const DRIFT_LIMIT = 3; // 다른 사람과 이만큼(초) 어긋나면 위치를 다시 맞춘다
+// 위치를 옮기면(seekTo) YouTube 가 제목·일시정지·공유 버튼을 몇 초 띄운다. 옮긴 곳을 불러오느라 다시 밀리면
+// 5초마다 또 옮기게 되어 버튼이 사라지지 않으므로, 옮기는 횟수를 아낀다
+const SEEK_LEAD = 1;           // 불러오는 시간만큼 조금 앞으로 옮긴다(초)
+const SEEK_COOLDOWN = 20000;   // 한 번 옮기면 이만큼(ms)은 다시 옮기지 않는다
+const SEEK_MAX_STRIKES = 3;    // 연속으로 이만큼 옮겨도 계속 어긋나면
+const SEEK_REST = 120000;      // 이만큼(ms) 맞추기를 쉰다 (조금 어긋나는 게 버튼이 계속 뜨는 것보다 낫다)
+let lastSeekAt = 0;
+let seekStrikes = 0;
+let seekRestUntil = 0;
 
 let player = null;
 let playerReady = null;   // 플레이어 준비 Promise
@@ -132,6 +141,7 @@ async function sync() {
   if (np.id !== loadedItemId) {
     loadedItemId = np.id;
     durationSent = false;
+    resetCatchUp();
     // 라이브 방송에 시작 위치를 주면 "녹화를 볼 수 없음" 오류가 나므로, 길이를 아는(라이브가 아닌) 영상만 위치를 지정한다.
     // 길이를 아직 모르면 0초부터 틀고, 다른 사람이 길이를 알려주면 다음 동기화 때 위치를 맞춘다
     const video = np.duration ? { videoId: np.youtubeId, startSeconds: expectedPosition(np) } : { videoId: np.youtubeId };
@@ -152,10 +162,31 @@ async function sync() {
     return;
   }
   // 라이브(길이 없음)가 아닐 때만 위치를 맞춘다
-  if (np.duration && playerState === YT.PlayerState.PLAYING) {
-    const expected = expectedPosition(np);
-    if (Math.abs(p.getCurrentTime() - expected) > DRIFT_LIMIT) p.seekTo(expected, true);
+  if (np.duration && playerState === YT.PlayerState.PLAYING) catchUp(p, expectedPosition(np));
+}
+
+/** 어긋난 만큼 위치를 옮긴다. 너무 자주 옮기지 않는다 (SEEK_* 참고) */
+function catchUp(p, expected) {
+  const now = Date.now();
+  if (Math.abs(p.getCurrentTime() - expected) <= DRIFT_LIMIT) {
+    seekStrikes = 0;
+    return;
   }
+  if (now < seekRestUntil || now - lastSeekAt < SEEK_COOLDOWN) return;
+  if (++seekStrikes > SEEK_MAX_STRIKES) {
+    seekStrikes = 0;
+    seekRestUntil = now + SEEK_REST;
+    return;
+  }
+  lastSeekAt = now;
+  p.seekTo(expected + SEEK_LEAD, true);
+}
+
+/** 새 곡이 시작되면 맞추기 기록을 처음부터 */
+function resetCatchUp() {
+  lastSeekAt = 0;
+  seekStrikes = 0;
+  seekRestUntil = 0;
 }
 
 // ---------------------------------------------------------------- 화면
@@ -563,6 +594,8 @@ export function leaveMusic() {
 export function applyState(next) {
   if (!roomId) return;
   clockOffset = next.serverTime - Date.now();
+  // 방장이 위치를 옮기거나 다시 재생하면 시작 시각이 바뀐다 → 기다리지 않고 바로 맞춘다
+  if (next.nowPlaying?.startedAt !== state?.nowPlaying?.startedAt) resetCatchUp();
   state = next;
   render();
   sync();

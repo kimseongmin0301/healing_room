@@ -30,14 +30,69 @@ function card(room) {
   return button;
 }
 
+// 한 쪽에 보여줄 카드 수: 넓으면 6(3×2), 중간 4(2×2), 휴대폰 2(1×2). CSS 의 .room-page 열 수와 맞춘다
+const pageSize = () => innerWidth > 960 ? 6 : innerWidth > 600 ? 4 : 2;
+let lastRooms = [];
+
+function currentPage() {
+  return grid.clientWidth ? Math.round(grid.scrollLeft / grid.clientWidth) : 0;
+}
+
+function renderRooms(rooms) {
+  const page = currentPage();
+  const size = pageSize();
+  const pages = [];
+  for (let i = 0; i < rooms.length; i += size) {
+    const div = Object.assign(document.createElement('div'), { className: 'room-page' });
+    div.append(...rooms.slice(i, i + size).map(card));
+    pages.push(div);
+  }
+  grid.replaceChildren(...pages);
+  // 목록을 새로 그려도 보던 쪽에 머문다
+  grid.style.scrollBehavior = 'auto';
+  grid.scrollLeft = Math.min(page, pages.length - 1) * grid.clientWidth;
+  grid.style.scrollBehavior = '';
+  updateSlider();
+}
+
+function updateSlider() {
+  const count = grid.querySelectorAll('.room-page').length;
+  const page = currentPage();
+  $('rooms-prev').hidden = page <= 0;
+  $('rooms-next').hidden = page >= count - 1;
+  $('room-dots').replaceChildren(...(count > 1 ? Array.from({ length: count }, (_, i) =>
+    Object.assign(document.createElement('span'), { className: i === page ? 'on' : '' })) : []));
+}
+
+let targetPage = null; // 넘기는 중인 쪽 (빠르게 여러 번 눌러도 한 쪽씩 정확히 넘어가게)
+
+function slide(step) {
+  const count = grid.querySelectorAll('.room-page').length;
+  targetPage = Math.max(0, Math.min(count - 1, (targetPage ?? currentPage()) + step));
+  grid.scrollTo({ left: targetPage * grid.clientWidth, behavior: 'smooth' });
+}
+
 async function refresh() {
   try {
-    const rooms = await api('GET', '/api/rooms');
-    grid.replaceChildren(...rooms.map(card));
+    lastRooms = await api('GET', '/api/rooms');
+    renderRooms(lastRooms);
   } catch {
     grid.textContent = '방 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
+    updateSlider();
   }
 }
+
+$('rooms-prev').addEventListener('click', () => slide(-1));
+$('rooms-next').addEventListener('click', () => slide(1));
+grid.addEventListener('scroll', () => requestAnimationFrame(() => {
+  if (targetPage !== null && Math.abs(grid.scrollLeft - targetPage * grid.clientWidth) < 2) targetPage = null;
+  updateSlider();
+}), { passive: true });
+grid.addEventListener('pointerdown', () => { targetPage = null; }); // 손으로 넘기기 시작하면 맡긴다
+let lastSize = pageSize();
+addEventListener('resize', () => {
+  if (pageSize() !== lastSize) { lastSize = pageSize(); renderRooms(lastRooms); } else updateSlider();
+});
 
 // ---------------------------------------------------------------- 방 만들기
 

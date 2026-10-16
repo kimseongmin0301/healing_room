@@ -16,8 +16,13 @@ const scene = new Scene($('scene'));
 
 let current = null;   // { id, effect, media }
 let socket = null;
-let musicOn = false;      // 음악(YouTube) 소리
-let ambientOn = false;    // 환경음
+// 소리 켜짐/꺼짐은 브라우저에 기억하고, 처음이면 둘 다 켠다
+let musicOn = store.get('musicOn', true);      // 음악(YouTube) 소리
+let ambientOn = store.get('ambientOn', true);  // 환경음
+// 브라우저는 사용자가 한 번 누르기 전에는 소리를 막는다. 새로고침·주소로 들어오면 음소거로 틀어 두었다가
+// 페이지 어디든 처음 누를 때(unlockSound) 켜 둔 소리를 낸다
+let soundUnlocked = navigator.userActivation?.hasBeenActive ?? false;
+let unlockTarget = null; // 소리를 처음 풀어 준 누름이 어느 요소였는지
 let ambientPaused = false; // 음악 때문에 환경음을 자동으로 끈 상태 (음악이 멈추면 다시 켠다)
 let lobbyMessage = '';   // 로비로 돌아갈 때 보여줄 안내 (닫힌 방 등)
 let enterSeq = 0;     // 방을 빠르게 바꿀 때 늦게 끝난 로딩을 버리기 위한 번호
@@ -143,8 +148,10 @@ function route() {
 // ---------------------------------------------------------------- 소리: 음악과 환경음은 따로 켜고 끈다
 
 function renderSoundButtons() {
-  $('music-sound').textContent = musicOn ? '음악 끄기' : '음악 켜기';
-  $('music-sound').classList.toggle('on', !musicOn); // 꺼져 있을 때 눈에 띄게
+  const locked = !soundUnlocked && musicOn;
+  $('music-sound').textContent = locked ? '🔈 소리 켜기' : musicOn ? '음악 끄기' : '음악 켜기';
+  $('music-sound').title = locked ? '브라우저 정책상 화면을 한 번 눌러야 소리가 나요' : '';
+  $('music-sound').classList.toggle('on', locked || !musicOn); // 소리가 안 날 때 눈에 띄게
   $('ambient-sound').textContent = ambientOn ? '환경음 끄기' : ambientPaused ? '환경음 쉬는 중' : '환경음 켜기';
   $('ambient-sound').classList.toggle('on', !ambientOn && !ambientPaused);
   $('mixer-note').hidden = !ambientPaused;
@@ -152,15 +159,27 @@ function renderSoundButtons() {
 
 function setMusic(on) {
   musicOn = on;
-  setMusicMuted(!on);
+  setMusicMuted(!(on && soundUnlocked));
   renderSoundButtons();
 }
 
 function setAmbient(on) {
   ambientOn = on;
   ambientPaused = false;
-  setAmbientEnabled(on);
+  setAmbientEnabled(on && soundUnlocked);
   renderSoundButtons();
+}
+
+// 페이지에서 처음 누르거나 키를 칠 때: 켜 둔 음악·환경음 소리를 낸다
+function unlockSound(e) {
+  if (soundUnlocked) return;
+  soundUnlocked = true;
+  unlockTarget = e.target; // 소리 버튼을 눌러서 풀렸다면 그 클릭은 "켜기"로만 쓴다 (바로 꺼지지 않게)
+  setMusic(musicOn);
+  setAmbient(ambientOn);
+}
+for (const type of ['pointerdown', 'keydown', 'touchstart']) {
+  addEventListener(type, unlockSound, { capture: true, passive: true });
 }
 
 // 음악이 들리기 시작하면 환경음을 잠시 끄고, 음악이 멈추면 (자동으로 껐던 경우에만) 다시 켠다
@@ -189,8 +208,19 @@ $('reset-room').onclick = async () => {
   }
 };
 addEventListener('nickname-change', e => socket?.sendNickname(e.detail));
-$('music-sound').onclick = () => { setMusic(!musicOn); store.set('musicOn', musicOn); };
+// 소리를 풀어 준 바로 그 클릭이면 true (그 클릭으로 켜고 끄지 않는다)
+function consumeUnlockClick(button) {
+  if (unlockTarget && button.contains(unlockTarget)) { unlockTarget = null; return true; }
+  unlockTarget = null;
+  return false;
+}
+$('music-sound').onclick = () => {
+  if (consumeUnlockClick($('music-sound'))) return;
+  setMusic(!musicOn);
+  store.set('musicOn', musicOn);
+};
 $('ambient-sound').onclick = () => {
+  if (consumeUnlockClick($('ambient-sound'))) return;
   // 음악 때문에 쉬는 중에 누르면 "다시 켜기"로 본다 (직접 켠 것은 음악이 나와도 유지)
   setAmbient(!ambientOn);
   store.set('ambientOn', ambientOn);
@@ -205,7 +235,8 @@ addEventListener('hashchange', route);
 initMusic();
 initChat();
 initSupport();
-renderSoundButtons();
+setMusic(musicOn);   // 아직 누르지 않았으면 음소거로 시작하고, 누르는 순간 소리를 낸다
+setAmbient(ambientOn);
 route();
 
 (function loop() {
