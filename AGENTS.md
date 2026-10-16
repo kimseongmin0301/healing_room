@@ -20,6 +20,7 @@
 - 누구나 YouTube 링크로, 또는 **직접 검색**해서 곡을 신청할 수 있습니다(개수 제한 없음. 검색은 한 사람이 1분에 5번). 대기열이 비면 **방금 나온 곡과 비슷한 영상이 자동으로 이어지고(자동 추천)**, 추천을 못 찾으면 테마 기본 음악이 나옵니다. 자동으로 넣은 곡(기본 음악·자동 추천)은 누구나 바로 넘길 수 있고, 신청곡이 들어오면 바로 바뀝니다.
 - 넘기기/빼기: **내 신청곡**과 **방장**은 바로, 그 밖에는 **방 인원의 50%를 넘는(과반) 투표**가 필요합니다. 대기열 순서는 방장만 바꿉니다.
 - 곡 추천: 내 신청 기록(브라우저), YouTube에서 찾은 비슷한 영상(API 키 필요), 함께 신청된 곡, 테마 인기곡.
+- 영상 자막은 끕니다. 자동 추천은 같은 노래의 다른 영상(공식 MV·라이브·가사 영상)을 다시 고르지 않습니다.
 - **접속자 목록**: 방 사람 수와 닉네임, **앞부분만 보이는 IP**(`203.0.*.*`)를 모두에게 보여줍니다. 전체 IP 는 관리자 화면(`/admin.html`, `ADMIN_TOKEN`)에서만 봅니다.
 - **방 채팅**: 닉네임은 자동으로 붙고("졸린 고양이" 같은) 바꿀 수 있습니다(브라우저에 저장). 메시지는 Redis에 방마다 최근 100개를 보관하고, 사용자 방은 닫힐 때 지우며 기본 방은 최근 24시간만 보여줍니다.
 
@@ -42,7 +43,8 @@
 ```
 /                                   ← 저장소 루트
 ├─ AGENTS.md / CLAUDE.md / README.md
-├─ docs/screenshots/               ← README 화면 캡처 (화면이 바뀌면 다시 찍기)
+├─ docs/screenshots/               ← README 화면 캡처 (화면이 바뀌면 다시 찍기), themes.jpg 는 테마 배경 모음
+├─ docs/theme-image-prompts.md     ← 새 테마 배경 이미지를 ChatGPT 에 요청할 때 첨부하는 요청서
 ├─ deploy/                          ← 운영 서버 배포 (systemd, nginx, 설치·배포 스크립트). 11절
 ├─ design/                          ← 디자인 시안(SVG/PNG), 초기 프로토타입(live/)
 └─ healing-room/                    ← Spring Boot 앱 (Gradle 프로젝트 루트)
@@ -74,7 +76,7 @@
       │  │  ├─ event/               QueueChangedEvent (상태가 바뀌면 발행 → WebSocket 으로 전송)
       │  │  ├─ exception/           QueueException
       │  │  ├─ client/              YouTubeOEmbedClient (영상 제목 조회, API 키 불필요)
-      │  │  └─ util/                YouTubeLinks (링크 → 영상 id)
+      │  │  └─ util/                YouTubeLinks (링크 → 영상 id), SongTitles (제목 → 곡 이름, 같은 노래 알아보기)
       │  ├─ chat/                   ← 방 채팅 (Redis)
       │  │  ├─ controller/          ChatController           GET/POST /api/rooms/{roomId}/chat
       │  │  ├─ service/             ChatService(보내기·기록·pub/sub 수신·닫힌 방 정리), ChatPolicy(입력 규칙)
@@ -84,10 +86,12 @@
       │  │  └─ exception/           ChatException
       │  ├─ recommend/              ← 곡 추천
       │  │  ├─ controller/          RecommendController      GET /api/rooms/{roomId}/recommendations
-      │  │  ├─ service/             RecommendService
+      │  │  │                       SearchController         GET /api/rooms/{roomId}/search?q= (직접 검색)
+      │  │  ├─ service/             RecommendService, SearchService (방 접속 확인, 1분에 5번 제한)
+      │  │  ├─ exception/           SearchException
       │  │  ├─ repository/          RecommendRepository (JdbcClient 집계 SQL: 테마 인기곡, 함께 신청된 곡)
-      │  │  ├─ client/              YouTubeSearchClient (YouTube Data API 검색, 12시간 캐시)
-      │  │  └─ dto/                 RecommendationResponse, VideoSuggestion
+      │  │  ├─ client/              YouTubeSearchClient (비슷한 영상·직접 검색, 12시간 캐시, 할당량 소진 감지)
+      │  │  └─ dto/                 RecommendationResponse, VideoSuggestion, SearchResult
       │  ├─ admin/                  ← 관리자 (ADMIN_TOKEN 으로 보호)
       │  │  ├─ controller/          AdminController          GET /api/admin/presence
       │  │  ├─ service/             AdminService (키 확인, 모든 방 접속자·전체 IP)
@@ -112,7 +116,7 @@
             ├─ api.js               fetch 래퍼, 방문자 id(UUID), localStorage 도우미
             ├─ lobby.js             로비 방 카드 + 인원, 방 만들기
             ├─ room-socket.js       WebSocket 연결·재연결
-            ├─ music.js             YouTube 플레이어 동기화, 방장 조작, 대기열/지난 신청곡/추천 탭, 내 신청 기록, 창 최소화·최대화
+            ├─ music.js             YouTube 플레이어 동기화(자막 끄기), 방장 조작, 대기열/지난 신청곡/추천/검색 탭, 내 신청 기록, 창 최소화·최대화
             ├─ chat.js              채팅 창 (지난 대화, 보내기, 실시간 수신, 닉네임, 접기·안 읽은 수)
             ├─ people.js            함께 있는 사람 목록 (닉네임, 가린 IP, 방장 👑)
             ├─ admin.js             관리자 화면 (static/admin.html)
@@ -253,6 +257,12 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 이상한 영상이 올라왔을 때 등 방의 흔적을 지웁니다: `room_queue_item`(지난 신청곡·재생 기록, 투표는 FK CASCADE) 삭제 → 인기곡·함께 신청된 곡·자동 추천 후보에서도 사라짐, Redis 채팅 키 삭제 후 `chat-clear` 알림으로 화면도 비움. 전체 초기화는 YouTube 검색 캐시도 비웁니다. 지운 뒤 사람이 있는 방은 기본 음악부터 다시 틉니다.
 - 방문자는 **기본 방의 방장만** 할 수 있습니다(화면의 "🧹 기록 초기화"). 사용자 방은 30분 비면 닫히므로 대상이 아닙니다. 관리자는 `/admin.html` 에서 방별·전체 초기화.
 - 브라우저 `localStorage.myRequests`(내 신청 기록)는 각자 브라우저에 있어 서버에서 지울 수 없습니다.
+
+### 직접 검색 (SearchService)
+- 신청 칸에 링크가 아닌 말을 넣으면 검색합니다(`music.js` 의 `looksLikeLink`). 결과는 "검색" 탭에 썸네일·채널·길이와 함께 나오고 눌러서 신청합니다.
+- `search`(100) + `videos`(1) 로 찾고, 외부 재생 가능(`status.embeddable`)·라이브 아님(길이 0 제외)·한국 차단 아님(`regionRestriction.blocked`)만 돌려줍니다.
+- 방에 접속해 있는 사람만, 한 사람이 1분에 5번(`healing-room.youtube.search-per-minute`). 같은 검색어는 12시간 캐시.
+- 하루 할당량을 다 쓰면(403 quota) 태평양 시간 자정까지 YouTube 를 부르지 않고 503 "링크로 신청해 주세요". 자동 추천·비슷한 영상도 같은 표시를 보고 쉽니다.
 
 ### 곡 추천 (RecommendService)
 - **내가 자주 신청한 곡**: 서버가 아니라 브라우저 `localStorage.myRequests`(최대 100곡, 신청 횟수·마지막 시각)에 저장합니다.
