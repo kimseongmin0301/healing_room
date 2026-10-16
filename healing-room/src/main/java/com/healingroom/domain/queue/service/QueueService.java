@@ -5,13 +5,16 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -57,6 +60,9 @@ import com.healingroom.domain.theme.service.ThemeService;
 public class QueueService {
 
     public enum Direction { UP, DOWN }
+
+    private static final int MAX_NEW_SEARCHES = 2; // 자동 추천 한 번에 새로 YouTube 를 검색하는 횟수 (할당량 아끼기)
+    private static final int MAX_SEEDS = 5;        // 자동 추천의 기준 곡 수
 
     private final QueueItemRepository items;
     private final QueueVoteRepository votes;
@@ -345,30 +351,61 @@ public class QueueService {
     }
 
     /**
-     * 자동 추천: 방금 끝난 곡과 비슷한 영상을 고른다. 최근 30곡 안에 나온 곡은 다시 고르지 않는다.
+     * 자동 추천: 이 방에서 최근 듣던 곡과 비슷한 영상을 고른다. 최근 30곡 안에 나온 곡은 다시 고르지 않고,
      * 영상 id 가 달라도 같은 노래(공식 MV·라이브·가사 영상 등, {@link SongTitles#sameSong})면 고르지 않는다.
-     * ① YouTube 에서 찾은 비슷한 영상(API 키가 있을 때, 12시간 캐시) ② 그 곡과 함께 신청된 곡 순서로 찾고,
-     * 둘 다 없으면 비어 있다(→ 테마 기본 음악). 방에 처음 들어와 직전 곡이 없을 때도 비어 있다.
+     *
+     * <p>기준 곡: 방금 끝난 곡 → 이 방에서 최근 신청·자동 추천된 곡들 (기본 음악은 기준으로 쓰지 않는다.
+     * 기본 음악 제목으로 찾으면 같은 시리즈만 나와 기본 음악 몇 곡이 계속 돌았다).
+     * 기준 곡마다 ① YouTube 비슷한 영상(12시간 캐시) ② 함께 신청된 곡을 보고, 모두 없으면 ③ 테마 인기곡.
+     * 그래도 없으면 비어 있다(→ 테마 기본 음악). 새로 YouTube 를 검색하는 건 한 번에 {@value #MAX_NEW_SEARCHES}번까지.
      */
     private Optional<QueueItem> nextAutoplay(String roomId, QueueItem previous) {
         if (previous == null) {
             return Optional.empty();
         }
+        List<QueueItem> recentItems = items.findTop30ByRoomIdOrderByIdDesc(roomId);
         Set<String> recent = new HashSet<>();
         List<String> recentTitles = new ArrayList<>();
-        items.findTop30ByRoomIdOrderByIdDesc(roomId).forEach(item -> {
+        recentItems.forEach(item -> {
             recent.add(item.getYoutubeId());
             recentTitles.add(item.getTitle());
         });
         recentTitles.add(previous.getTitle());
-        List<VideoSuggestion> candidates = new ArrayList<>(youtube.similarTo(previous.getYoutubeId(), previous.getTitle()));
-        candidates.addAll(recommendations.requestedTogether(previous.getYoutubeId(), 3, 10));
-        return candidates.stream()
-                .filter(video -> !recent.contains(video.youtubeId()))
-                .filter(video -> recentTitles.stream().noneMatch(title -> SongTitles.sameSong(title, video.title())))
-                .findFirst()
-                .map(video -> QueueItem.systemTrack(roomId, video.youtubeId(), video.title(), nextOrder(roomId),
-                        QueueSource.AUTOPLAY));
+        Predicate<VideoSuggestion> fresh = video -> !recent.contains(video.youtubeId())
+                && recentTitles.stream().noneMatch(title -> SongTitles.sameSong(title, video.title()));
+
+        int newSearches = 0;
+        for (QueueItem seed : autoplaySeeds(previous, recentItems)) {
+            List<VideoSuggestion> candidates = new ArrayList<>();
+            boolean cached = youtube.hasSimilarCached(seed.getYoutubeId());
+            if (cached || newSearches < MAX_NEW_SEARCHES) {
+                candidates.addAll(youtube.similarTo(seed.getYoutubeId(), seed.getTitle()));
+                if (!cached) {
+                    newSearches++;
+                }
+            }
+            candidates.addAll(recommendations.requestedTogether(seed.getYoutubeId(), 3, 10));
+            Optional<VideoSuggestion> pick = candidates.stream().filter(fresh).findFirst();
+            if (pick.isPresent()) {
+                return pick.map(video -> autoplayTrack(roomId, video));
+            }
+        }
+        String themeId = roomService.themeIdOf(roomId).orElse("");
+        return recommendations.popularInTheme(themeId, 30, 30).stream().filter(fresh).findFirst()
+                .map(video -> autoplayTrack(roomId, video));
+    }
+
+    /** 자동 추천의 기준 곡: 방금 끝난 곡, 그다음 최근 신청·자동 추천된 곡 (기본 음악 제외, 같은 영상은 한 번만) */
+    static List<QueueItem> autoplaySeeds(QueueItem previous, List<QueueItem> recentItems) {
+        Map<String, QueueItem> seeds = new LinkedHashMap<>();
+        Stream.concat(Stream.of(previous), recentItems.stream())
+                .filter(item -> item.getSource() != QueueSource.DEFAULT)
+                .forEach(item -> seeds.putIfAbsent(item.getYoutubeId(), item));
+        return seeds.values().stream().limit(MAX_SEEDS).toList();
+    }
+
+    private QueueItem autoplayTrack(String roomId, VideoSuggestion video) {
+        return QueueItem.systemTrack(roomId, video.youtubeId(), video.title(), nextOrder(roomId), QueueSource.AUTOPLAY);
     }
 
     /** 테마 기본 음악을 순서대로 돌아가며 고른다. */

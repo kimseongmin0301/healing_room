@@ -78,6 +78,12 @@ public class YouTubeSearchClient {
         return !apiKey.isEmpty();
     }
 
+    /** 이 영상의 비슷한 영상을 이미 찾아 두었으면 true (다시 물어도 할당량을 쓰지 않는다) */
+    public boolean hasSimilarCached(String videoId) {
+        Cached cached = cache.get(videoId);
+        return cached != null && cached.expiresAt().isAfter(Instant.now());
+    }
+
     /** 오늘 할당량을 다 썼으면 true */
     public boolean quotaExhausted() {
         return Instant.now().isBefore(quotaResetAt);
@@ -103,7 +109,8 @@ public class YouTubeSearchClient {
                             .queryParam("videoCategoryId", MUSIC_CATEGORY)
                             .queryParam("videoEmbeddable", "true")
                             .queryParam("safeSearch", "moderate")
-                            .queryParam("maxResults", "10")
+                            // 25개까지 받아도 할당량은 같다 (최근 곡·같은 노래를 빼고도 후보가 남도록 넉넉히)
+                            .queryParam("maxResults", "25")
                             .queryParam("q", searchQuery(title))
                             .queryParam("key", apiKey)
                             .build())
