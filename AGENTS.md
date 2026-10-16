@@ -62,14 +62,15 @@
       │  │  ├─ repository/          ThemeRepository, ThemeAmbientRepository, ThemeTrackRepository
       │  │  ├─ entity/              Theme, ThemeAmbient, ThemeTrack(기본 음악)
       │  │  └─ dto/                 ThemeResponse, AmbientResponse
-      │  ├─ room/                   ← 방 (만들기, 목록, 빈 방 닫기)
-      │  │  ├─ controller/          RoomController           GET/POST /api/rooms, GET /api/rooms/{id}
-      │  │  ├─ service/             RoomService (1분마다 30분 넘게 빈 방 닫기)
+      │  ├─ room/                   ← 방 (만들기, 목록, 방장·관리자의 설정 바꾸기·닫기, 빈 방 닫기)
+      │  │  ├─ controller/          RoomController           GET/POST /api/rooms, GET /api/rooms/{id}, PUT …/settings, POST …/close, POST …/reset
+      │  │  ├─ service/             RoomService (설정 바꾸기·닫기, 최대 인원, 1분마다 30분 넘게 빈 방 닫기), RoomResetService (기록 초기화)
       │  │  ├─ repository/          RoomRepository
       │  │  ├─ entity/              Room
-      │  │  ├─ dto/                 RoomResponse, RoomDetailResponse, CreateRoomRequest
-      │  │  ├─ event/               RoomClosedEvent (방이 닫히면 발행 → 채팅 기록 삭제)
-      │  │  └─ exception/           RoomException
+      │  │  ├─ dto/                 RoomResponse(maxPeople 포함), RoomDetailResponse, CreateRoomRequest, RoomSettingsRequest
+      │  │  ├─ event/               RoomClosedEvent (by: host·admin·idle → 채팅 삭제 + 남은 사람에게 room-closed),
+      │  │  │                       RoomUpdatedEvent (설정이 바뀌면 → room-updated)
+      │  │  └─ exception/           RoomException (HostOnly, DefaultRoomLocked, DefaultRoomTheme, InvalidMaxPeople 등)
       │  ├─ queue/                  ← 함께 듣는 음악 (대기열·투표·방장 조작)
       │  │  ├─ controller/          QueueController          /api/rooms/{roomId}/queue/**
       │  │  ├─ service/             QueueService(핵심 로직), VotePolicy(과반 규칙)
@@ -104,11 +105,13 @@
       │  │  ├─ dto/                 FeedbackRequest, FeedbackResponse (방문자 id 앞 8자리만)
       │  │  └─ exception/           FeedbackException
       │  ├─ admin/                  ← 관리자: ① 로그인(쿠키 HR_ADMIN) ② 요청마다 X-Admin-Token. /admin 은 로그인 전 pages/admin-login.html
-      │  │  ├─ controller/          AdminController          /api/admin/login·logout·presence·feedback·reset
+      │  │  ├─ controller/          AdminController          /api/admin/login·logout·presence·feedback·reset·kick·rooms
       │  │  ├─ service/             AdminLoginService (아이디·비밀번호 해시 PBKDF2, IP 5번 틀리면 15분 잠금, 로그인 8시간, 메모리),
       │  │  │                       AdminService (관리자 키 확인, 모든 방 접속자·전체 IP)
       │  │  ├─ dto/                 AdminLoginRequest, AdminPresenceResponse
       │  │  └─ exception/           AdminException (설정 없음 404, 키·로그인 틀림 401, 잠금 429)
+      │  ├─ visitor/                ← 방문자 번호 (로그인 없이 브라우저 구분)
+      │  │                          VisitorController (GET /api/visitor), VisitorCookie (쿠키 hr_vid, WebSocket 연결 때도 읽음)
       │  └─ presence/               ← 방 접속(누가 어느 방에 있는지, 방장, 닉네임, IP), 내보내기
       │     ├─ controller/          KickController           POST /api/rooms/{roomId}/kick (방장)
       │     ├─ exception/           PresenceException
@@ -279,7 +282,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | GET · DELETE | `/api/admin/feedback`, `/api/admin/feedback/{id}` | **관리자** 받은 의견 최근 200개 / 지우기 |
 | POST | `/api/admin/login`, `/api/admin/logout` | 관리자 로그인 `{ username, password }` → 쿠키 `HR_ADMIN`(HttpOnly·Secure·SameSite=Strict, 8시간). 한 IP 5번 틀리면 15분 429 |
 | GET | `/api/admin/presence` | **관리자** (로그인 쿠키 + `X-Admin-Token`) 모든 방 접속자: 닉네임, 전체 IP, 방문자 id 앞 8자리, 들어온 시각 |
-| WS | `/ws/rooms/{roomId}?visitorId={uuid}&nickname={닉네임}` | 연결돼 있는 동안 "방에 있음". 서버 → `state`(음악), `chat`(새 채팅), `presence`(접속자 목록). 브라우저 → `{"type":"nickname","nickname":"…"}`(닉네임 변경). 닫힌 방이면 연결 거부 |
+| WS | `/ws/rooms/{roomId}?visitorId={uuid}&nickname={닉네임}` | 연결돼 있는 동안 "방에 있음". 서버 → `state`(음악), `chat`(새 채팅), `chat-clear`(채팅 지움), `presence`(접속자 목록), `kicked`(내보내짐, 4001), `room-closed`(`by`, 4002), `room-full`(`max`, 4003), `room-updated`(설정 바뀜). 쿠키 `hr_vid` 가 있으면 주소의 visitorId 보다 쿠키를 씁니다. 브라우저 → `{"type":"nickname","nickname":"…"}`(닉네임 변경). 닫힌 방이면 연결 거부 |
 
 ### 화면 주소 (SiteController)
 | 주소 | 보여주는 것 |
@@ -340,7 +343,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 방장은 자기 방에서(자기 자신 제외), 관리자는 어느 방에서나 내보냅니다. 사람은 **가린 키**(`RoomSessionRegistry.keyOf`: 서버를 켤 때 만든 무작위 값 + 방 + 방문자 id 의 SHA-256 앞 16자)로 가리키고, 방문자 id 는 밖에 내보내지 않습니다.
 - 내보내면 그 사람의 모든 탭에 `{type:"kicked", by:"host"|"admin", until}` 을 보내고 **4001** 로 끊습니다. 화면은 다시 연결하지 않고 `/` 로 가서 슬픈 고양이 창(`#kicked-dialog`, `images/mascot-sad.webp`)을 띄웁니다.
 - **10분 동안 그 방에 다시 못 들어옵니다**(방문자 id 기준, 서버 메모리). 다시 연결하면 `by:"ban"` 알림 후 4001. 들어온 순서도 지워져 다시 오면 맨 뒤(방장 아님)입니다.
-- 방문자 id 는 브라우저 저장소를 지우면 바뀌므로 완벽한 차단은 아닙니다(장난 방지용).
+- 방문자 id 는 쿠키(`hr_vid`)에도 있어 저장소만 지워서는 피할 수 없지만, 쿠키까지 지우거나 시크릿 창을 쓰면 새 사람으로 보이므로 완벽한 차단은 아닙니다(장난 방지용).
 
 ### 의견 보내기 (FeedbackService)
 - `POST /api/feedback` 익명. 제어 문자 정리, 1~1000자. 한 브라우저(방문자 id) 10분에 3번, 사이트 전체 1시간에 60번(방문자 id 는 바꿀 수 있어 전체 한도도 둠). IP·연락처 저장 안 함.
@@ -441,5 +444,6 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - [x] 의견 보내기(V9), 관리자 로그인 + 관리자 키, 서버비 후원 버튼
 - [x] 방장·관리자 내보내기 (10분 재입장 금지, 슬픈 고양이 창), 방문자 id 쿠키 함께 저장
 - [x] 방장의 방 설정 바꾸기(이름·테마·최대 인원)·방 닫기, 방 만들 때 최대 인원(V11)
+- [x] 관리자 방 관리 (모든 방의 이름·테마·최대 인원 바꾸기, 방 없애기. 기본 방은 이름·최대 인원만)
 - [ ] 테마별 배경 영상 (선택)
 - 방문자 로그인은 **만들지 않습니다** (익명 서비스). 로그인은 관리자 화면에만 있습니다.
