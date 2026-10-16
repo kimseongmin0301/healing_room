@@ -2,7 +2,7 @@
 import { stars, meteors, sprite } from './parts.js';
 import { rand } from '../scene.js';
 
-const CORE = [0.447, 0.617];
+const CORE = [0.443, 0.59];
 
 export function create(scene) {
   const { ctx } = scene;

@@ -2,15 +2,15 @@
 import { wisps, sprite } from './parts.js';
 import { rand } from '../scene.js';
 
-const WINDOW = [0.16, 0, 0.965, 0.69];
-const CUP = [0.556, 0.665];
+const WINDOW = [0.143, 0, 0.988, 0.675];
+const CUP = [0.559, 0.649];
 const MAX_DROPS = 220;
 
 export function create(scene) {
   const { ctx } = scene;
   const steam = wisps(scene, { u: CUP[0], v: CUP[1], spread: 0.012, size: 46, rise: 0.2, count: 16, alpha: 0.13 });
   const bokeh = sprite('255,200,140');
-  const lights = Array.from({ length: 40 }, () => ({ u: rand(0.17, 0.95), v: rand(0.5, 0.62), p: rand(0, 7), s: rand(0.01, 0.03), size: rand(10, 26) }));
+  const lights = Array.from({ length: 40 }, () => ({ u: rand(0.155, 0.97), v: rand(0.475, 0.6), p: rand(0, 7), s: rand(0.01, 0.03), size: rand(10, 26) }));
   const [u0, v0, u1, v1] = WINDOW;
   const newDrop = () => ({ u: rand(u0, u1), v: rand(v0, v1), r: rand(1.2, 3.2), speed: 0, wait: rand(0, 600) });
   const drops = Array.from({ length: 140 }, newDrop);

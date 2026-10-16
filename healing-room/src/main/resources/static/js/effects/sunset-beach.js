@@ -2,8 +2,8 @@
 import { glints } from './parts.js';
 import { rand } from '../scene.js';
 
-const SUN = [0.501, 0.425];
-const HORIZON = 0.52;
+const SUN = [0.501, 0.397];
+const HORIZON = 0.496;
 
 export function create(scene) {
   const { ctx } = scene;

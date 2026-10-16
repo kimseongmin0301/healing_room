@@ -2,7 +2,7 @@
 import { stars, meteors, flicker, sprite } from './parts.js';
 
 // 행성 가장자리(대기) 곡선: 왼쪽 끝 · 가운데 · 오른쪽 끝의 높이(v)를 지나는 2차 곡선
-const LIMB = [0.62, 0.5, 0.57];
+const LIMB = [0.593, 0.465, 0.54];
 const limbV = u => {
   const [a, b, c] = LIMB;
   const control = 2 * b - (a + c) / 2;
@@ -11,12 +11,12 @@ const limbV = u => {
 
 export function create(scene) {
   const { ctx } = scene;
-  const sky = stars(scene, [0, 0.02, 1, 0.45], 180);
-  const shooting = meteors(scene, [0.05, 0.03, 0.95, 0.4], 0.005);
-  const lamps = flicker(scene, [[0.33, 0.875, 0.03], [0.03, 0.9, 0.04]], '255,190,110', 0.15);
+  const sky = stars(scene, [0, 0, 1, 0.41], 180);
+  const shooting = meteors(scene, [0.05, 0.02, 0.95, 0.37], 0.005);
+  const lamps = flicker(scene, [[0.318, 0.866, 0.03], [0.01, 0.893, 0.04]], '255,190,110', 0.15);
   const dot = sprite('255,210,150');
   const city = Array.from({ length: 70 }, () => ({
-    u: 0.2 + Math.random() * 0.6, v: 0.72 + Math.random() * 0.17, p: Math.random() * 7, s: 0.02 + Math.random() * 0.05,
+    u: 0.18 + Math.random() * 0.64, v: 0.7 + Math.random() * 0.17, p: Math.random() * 7, s: 0.02 + Math.random() * 0.05,
   }));
 
   function draw(t) {
@@ -42,5 +42,5 @@ export function create(scene) {
     ctx.globalCompositeOperation = 'source-over';
   }
 
-  return { draw, click: (u, v) => { if (v < 0.48) shooting.add(u, v); } };
+  return { draw, click: (u, v) => { if (v < 0.44) shooting.add(u, v); } };
 }
