@@ -110,7 +110,8 @@
    src/main/resources/
       ├─ application.properties
       └─ static/                    ← 프론트엔드 (서버가 그대로 서빙)
-         ├─ index.html, css/style.css, images/
+         ├─ index.html (링크 미리보기 og 메타 태그 포함), favicon.ico, css/style.css
+         ├─ images/                 테마 배경(webp), 마스코트(mascot*.webp), og-image.jpg(링크 미리보기 1200×630), 아이콘, support-qr.png
          └─ js/
             ├─ app.js               진입점: #방id 라우팅(로비 ↔ 방), 애니메이션 루프
             ├─ api.js               fetch 래퍼, 방문자 id(UUID), localStorage 도우미
@@ -120,6 +121,7 @@
             ├─ chat.js              채팅 창 (지난 대화, 보내기, 실시간 수신, 닉네임, 접기·안 읽은 수)
             ├─ people.js            함께 있는 사람 목록 (닉네임, 가린 IP, 방장 👑)
             ├─ admin.js             관리자 화면 (static/admin.html)
+            ├─ support.js           위쪽 ☕ 서버비 후원 버튼 → 카카오페이 QR 창
             ├─ scene.js             캔버스 공통 도구 (cover 맞춤, 좌표 변환, wobble, glow, 배경 영상)
             ├─ audio/sounds.js      환경음 합성 (fire, wind, rain, waves, crickets, stream, thunder, hum, pad, city, seagulls, beat)
             ├─ audio/mixer.js       환경음 믹서 UI

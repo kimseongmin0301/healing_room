@@ -1,3 +1,5 @@
+<p align="center"><img src="healing-room/src/main/resources/static/images/mascot-music.webp" alt="힐링룸 마스코트" width="180"></p>
+
 # 🔥 힐링룸 (Healing Room)
 
 > 화면을 켜두고 멍하니 쉬는 웹 공간. 모닥불, 밤바다, 비 오는 숲, 우주를 바라보며 같은 방 사람들과 같은 음악을 들어요.

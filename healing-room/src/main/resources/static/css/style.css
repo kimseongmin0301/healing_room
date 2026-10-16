@@ -66,8 +66,12 @@ body:not(.in-room) canvas { display: none; }
   transition: opacity .2s;
 }
 .support-chip:hover, .support-chip:focus-visible { opacity: 1; }
-.dialog.support { width: min(340px, 100%); text-align: center; }
+.dialog.support { width: min(340px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; text-align: center; }
 .dialog.support img { display: block; margin: 14px auto; padding: 10px; background: #fff; border-radius: 12px; }
+.dialog.support img.support-mascot { margin: -8px auto 4px; padding: 0; background: none; height: auto; }
+/* 로비 제목 옆 마스코트 */
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand img { flex: none; width: 72px; height: auto; filter: drop-shadow(0 4px 12px rgba(0, 0, 0, .35)); }
 .dialog.support .dialog-actions { justify-content: center; }
 .dialog.support a.btn { text-decoration: none; }
 @media (max-width: 700px) {
