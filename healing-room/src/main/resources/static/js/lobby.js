@@ -105,7 +105,12 @@ function renderThemes() {
     option.setAttribute('role', 'radio');
     option.setAttribute('aria-checked', String(theme.id === pickedTheme));
     option.style.backgroundImage = `url("${theme.background}")`;
-    option.append(Object.assign(document.createElement('span'), { textContent: theme.title }));
+    // 넓은 화면은 "카페멍 · 비 오는 창가", 휴대폰은 "카페멍" (CSS 로 둘 중 하나만 보임)
+    const label = document.createElement('span');
+    label.append(Object.assign(document.createElement('b'), { className: 'long', textContent: theme.title }),
+      Object.assign(document.createElement('b'), { className: 'short', textContent: theme.name }));
+    label.title = theme.title;
+    option.append(label);
     option.onclick = () => { pickedTheme = theme.id; renderThemes(); };
     return option;
   }));

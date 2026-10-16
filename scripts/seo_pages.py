@@ -303,7 +303,7 @@ def themes_index():
             {'@type': 'ListItem', 'position': i + 1, 'name': t['title'], 'url': f'{SITE}/themes/{t["room"]}'}
             for i, t in enumerate(THEMES)]},
         crumbs(('힐링룸', '/'), ('테마', path))]}
-    write_page('themes/index.html', page(title, description, path, '/images/og-image.jpg?v=2', body, ld))
+    write_page('themes/index.html', page(title, description, path, '/images/og-cat.jpg', body, ld))
 
 
 def about():
@@ -353,7 +353,7 @@ def about():
         {'@type': 'HowTo', 'name': '힐링룸에서 쉬는 방법', 'step': [
             {'@type': 'HowToStep', 'position': i + 1, 'name': n, 'text': d} for i, (n, d) in enumerate(how)]},
         crumbs(('힐링룸', '/'), ('소개', path))]}
-    write_page('about.html', page(title, description, path, '/images/og-image.jpg?v=2', body, ld))
+    write_page('about.html', page(title, description, path, '/images/og-cat.jpg', body, ld))
 
 
 def sitemap():

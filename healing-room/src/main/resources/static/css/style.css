@@ -80,7 +80,16 @@ body:not(.in-room) canvas { display: none; }
   position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
   background: rgba(0, 0, 0, .6); padding: 16px;
 }
-.dialog { width: min(560px, 100%); padding: 22px; box-sizing: border-box; background: #17151b; }
+/* 창이 화면보다 길면(휴대폰) 창 안에서 스크롤하고, 아래 버튼(취소·만들기)은 늘 보이게 붙여 둔다 */
+.dialog {
+  --pad: 22px;
+  width: min(560px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--pad); box-sizing: border-box; background: #17151b;
+}
+.dialog .dialog-actions {
+  position: sticky; bottom: calc(-1 * var(--pad)); margin: 12px calc(-1 * var(--pad)) calc(-1 * var(--pad));
+  padding: 12px var(--pad) var(--pad); background: #17151b;
+}
 /* 서버비 후원: 위쪽 가운데에 작고 흐릿하게, 올리면 또렷하게 */
 .support-chip {
   position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 0; /* 다른 화면 요소에 늘 가려지도록 가장 뒤 (배경 캔버스 바로 위) */
@@ -116,6 +125,17 @@ body:not(.in-room) canvas { display: none; }
 .theme-option span {
   position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 8px; font-size: 13px; color: var(--text);
   background: linear-gradient(transparent, rgba(0, 0, 0, .75));
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; /* 이름이 길어도 한 줄로 */
+}
+.theme-option .short { display: none; }
+@media (max-width: 600px) {
+  /* 휴대폰: 테마를 3칸씩 작게, 이름은 짧게(카페멍) */
+  .theme-picker { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .theme-option { aspect-ratio: 1 / 1; border-radius: 10px; }
+  .theme-option .long { display: none; }
+  .theme-option .short { display: inline; }
+  .theme-option span { padding: 4px 6px; font-size: 12px; }
+  .dialog { --pad: 18px; }
 }
 .theme-option.on { border-color: var(--accent); }
 .hint-text { margin: 4px 0 0; font-size: 12px; color: var(--muted); line-height: 1.6; }

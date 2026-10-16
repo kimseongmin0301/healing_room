@@ -23,6 +23,15 @@ class YouTubeSearchClientTests {
     }
 
     @Test
+    void recognizesBothQuotaErrors() {
+        // 하루 할당량 초과(403)와 하루 검색 횟수 초과(429) 둘 다 "다 썼다"로 본다
+        assertThat(YouTubeSearchClient.isQuotaError(403, "{\"reason\":\"quotaExceeded\"}")).isTrue();
+        assertThat(YouTubeSearchClient.isQuotaError(429, "Quota exceeded for quota metric 'Search Queries'")).isTrue();
+        assertThat(YouTubeSearchClient.isQuotaError(403, "{\"reason\":\"forbidden\"}")).isFalse();
+        assertThat(YouTubeSearchClient.isQuotaError(500, "quota")).isFalse();
+    }
+
+    @Test
     void parsesIsoDuration() {
         assertThat(YouTubeSearchClient.parseSeconds("PT4M14S")).isEqualTo(254);
         assertThat(YouTubeSearchClient.parseSeconds("PT1H2M3S")).isEqualTo(3723);

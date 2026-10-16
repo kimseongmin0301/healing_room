@@ -4,6 +4,8 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -18,6 +20,8 @@ import com.healingroom.domain.queue.exception.QueueException;
  */
 @Component
 public class YouTubeOEmbedClient {
+
+    private static final Logger log = LoggerFactory.getLogger(YouTubeOEmbedClient.class);
 
     private final RestClient client;
 
@@ -42,9 +46,18 @@ public class YouTubeOEmbedClient {
             String text = title.toString();
             return text.length() > 200 ? text.substring(0, 200) : text;
         } catch (RestClientResponseException e) {
-            // 401/403: 임베드 금지, 400/404: 없는 영상
+            int status = e.getStatusCode().value();
+            // 어떤 영상이 왜 막혔는지 나중에 확인할 수 있게 남긴다 (영상 id 는 개인정보가 아니다)
+            log.info("영상 확인 실패 (video={}, oEmbed {})", videoId, status);
+            if (status == 401 || status == 403) {
+                throw new QueueException.EmbedBlocked();   // 업로더가 다른 사이트 재생을 막음
+            }
+            if (status == 400 || status == 404) {
+                throw new QueueException.VideoNotFound();  // 없거나 비공개
+            }
             throw new QueueException.VideoUnavailable();
         } catch (RestClientException e) {
+            log.warn("YouTube 영상 확인 연결 실패 (video={}): {}", videoId, e.getMessage());
             throw new QueueException.YouTubeUnreachable();
         }
     }

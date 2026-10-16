@@ -21,6 +21,24 @@ public abstract class QueueException extends ApiException {
         public VideoUnavailable() {
             super(HttpStatus.UNPROCESSABLE_CONTENT, "재생할 수 없는 영상이에요. 없는 영상이거나 외부 재생이 막혀 있어요.");
         }
+
+        protected VideoUnavailable(String message) {
+            super(HttpStatus.UNPROCESSABLE_CONTENT, message);
+        }
+    }
+
+    /** 업로더가 다른 사이트에서 재생하지 못하게 막아 둔 영상 (oEmbed 401·403) */
+    public static class EmbedBlocked extends VideoUnavailable {
+        public EmbedBlocked() {
+            super("업로더가 다른 사이트에서 재생하지 못하게 막아 둔 영상이에요. 같은 노래의 다른 영상(가사·음원 영상 등)을 찾아 주세요.");
+        }
+    }
+
+    /** 없거나 비공개인 영상 (oEmbed 400·404) */
+    public static class VideoNotFound extends VideoUnavailable {
+        public VideoNotFound() {
+            super("없거나 비공개인 영상이에요. 링크를 다시 확인해 주세요.");
+        }
     }
 
     public static class YouTubeUnreachable extends QueueException {

@@ -238,10 +238,17 @@ public class YouTubeSearchClient {
         }
     }
 
-    /** 할당량 초과 오류면 다음 리셋 시각(태평양 시간 자정)까지 YouTube 를 부르지 않도록 표시하고 true */
+    /**
+     * 할당량 초과 오류면 다음 리셋 시각(태평양 시간 자정)까지 YouTube 를 부르지 않도록 표시하고 true.
+     * 하루 할당량 초과는 403(quotaExceeded), 하루 검색 횟수(Search Queries per day, 100번) 초과는 429 로 온다
+     */
+    static boolean isQuotaError(int status, String body) {
+        return (status == 403 || status == 429) && body != null && body.toLowerCase(Locale.ROOT).contains("quota");
+    }
+
     private boolean noteQuota(RestClientException e) {
-        if (e instanceof RestClientResponseException response && response.getStatusCode().value() == 403
-                && response.getResponseBodyAsString().contains("quota")) {
+        if (e instanceof RestClientResponseException response
+                && isQuotaError(response.getStatusCode().value(), response.getResponseBodyAsString())) {
             quotaResetAt = LocalDate.now(QUOTA_ZONE).plusDays(1).atStartOfDay(QUOTA_ZONE).toInstant();
             log.warn("YouTube 하루 할당량을 다 썼어요. {} 까지 YouTube 검색을 쉬어요", quotaResetAt);
             return true;

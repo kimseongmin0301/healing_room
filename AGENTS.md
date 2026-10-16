@@ -119,7 +119,7 @@
       ├─ application.properties
       └─ static/                    ← 프론트엔드 (서버가 그대로 서빙)
          ├─ index.html (링크 미리보기 og 메타 태그 포함), favicon.ico, css/style.css
-         ├─ images/                 테마 배경(webp), 마스코트(mascot*.webp), og-image.jpg(링크 미리보기 1200×630), 아이콘, support-qr.png
+         ├─ images/                 테마 배경(webp), 마스코트(mascot*.webp), og-cat.jpg(링크 미리보기 1200×630), 아이콘, support-qr.png
          └─ js/
             ├─ app.js               진입점: 주소 /{방id} 라우팅(history API, 예전 /#id 는 바꿔 줌, 로비 ↔ 방), 애니메이션 루프
             ├─ api.js               fetch 래퍼, 방문자 id(UUID), localStorage 도우미
