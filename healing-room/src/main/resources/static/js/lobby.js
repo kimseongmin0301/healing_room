@@ -178,8 +178,7 @@ async function submitCreate(e) {
 
 /** 방장: 방 닫기. 닫으면 방에 있던 모두가 로비로 간다 (app.js 의 room-closed) */
 async function closeRoom() {
-  if (!confirm('이 방을 닫을까요?
-방에 있는 모두가 처음 화면으로 나가고, 채팅도 지워져요. 되돌릴 수 없어요.')) return;
+  if (!confirm('이 방을 닫을까요?\n방에 있는 모두가 처음 화면으로 나가고, 채팅도 지워져요. 되돌릴 수 없어요.')) return;
   try {
     await api('POST', `/api/rooms/${encodeURIComponent(form.room.id)}/close`);
     closeCreate();
