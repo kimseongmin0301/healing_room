@@ -59,7 +59,8 @@ function ensurePlayer() {
       width: '356', height: '200',
       // 브라우저 자동재생 정책 때문에 음소거로 시작하고, "음악 켜기"를 누르면 소리를 켠다
       // controls·disablekb·fs: 일시정지, 탐색, 키보드 조작을 없애 모두 같은 위치로 듣게 한다 (볼륨은 따로 슬라이더)
-      playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3 },
+      // cc_load_policy 0: 자막을 켜지 않는다 (영상 주인이 자동으로 켜 둔 자막은 재생될 때 hideCaptions 로 끈다)
+      playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, cc_load_policy: 0 },
       events: {
         onReady: () => { player.setVolume(volume); resolve(player); },
         onStateChange: onPlayerStateChange,
@@ -70,8 +71,18 @@ function ensurePlayer() {
   return playerReady;
 }
 
+// 자막 끄기: 영상에 따라 자막이 기본으로 켜져 나오므로, 재생이 시작될 때마다 자막 모듈을 내린다
+function hideCaptions() {
+  try {
+    player.setOption?.('captions', 'track', {});
+    player.unloadModule?.('captions');
+    player.unloadModule?.('cc'); // 예전 이름
+  } catch { /* 자막이 없는 영상이면 무시 */ }
+}
+
 function onPlayerStateChange(e) {
   if (e.data === YT.PlayerState.PLAYING) {
+    hideCaptions();
     if (!muted) player.unMute();
     reportDuration();
     setAudible(!muted);

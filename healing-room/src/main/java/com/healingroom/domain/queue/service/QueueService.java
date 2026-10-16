@@ -30,6 +30,7 @@ import com.healingroom.domain.queue.event.QueueChangedEvent;
 import com.healingroom.domain.queue.exception.QueueException;
 import com.healingroom.domain.queue.repository.QueueItemRepository;
 import com.healingroom.domain.queue.repository.QueueVoteRepository;
+import com.healingroom.domain.queue.util.SongTitles;
 import com.healingroom.domain.recommend.client.YouTubeSearchClient;
 import com.healingroom.domain.recommend.dto.VideoSuggestion;
 import com.healingroom.domain.recommend.repository.RecommendRepository;
@@ -345,6 +346,7 @@ public class QueueService {
 
     /**
      * 자동 추천: 방금 끝난 곡과 비슷한 영상을 고른다. 최근 30곡 안에 나온 곡은 다시 고르지 않는다.
+     * 영상 id 가 달라도 같은 노래(공식 MV·라이브·가사 영상 등, {@link SongTitles#sameSong})면 고르지 않는다.
      * ① YouTube 에서 찾은 비슷한 영상(API 키가 있을 때, 12시간 캐시) ② 그 곡과 함께 신청된 곡 순서로 찾고,
      * 둘 다 없으면 비어 있다(→ 테마 기본 음악). 방에 처음 들어와 직전 곡이 없을 때도 비어 있다.
      */
@@ -353,11 +355,17 @@ public class QueueService {
             return Optional.empty();
         }
         Set<String> recent = new HashSet<>();
-        items.findTop30ByRoomIdOrderByIdDesc(roomId).forEach(item -> recent.add(item.getYoutubeId()));
+        List<String> recentTitles = new ArrayList<>();
+        items.findTop30ByRoomIdOrderByIdDesc(roomId).forEach(item -> {
+            recent.add(item.getYoutubeId());
+            recentTitles.add(item.getTitle());
+        });
+        recentTitles.add(previous.getTitle());
         List<VideoSuggestion> candidates = new ArrayList<>(youtube.similarTo(previous.getYoutubeId(), previous.getTitle()));
         candidates.addAll(recommendations.requestedTogether(previous.getYoutubeId(), 3, 10));
         return candidates.stream()
                 .filter(video -> !recent.contains(video.youtubeId()))
+                .filter(video -> recentTitles.stream().noneMatch(title -> SongTitles.sameSong(title, video.title())))
                 .findFirst()
                 .map(video -> QueueItem.systemTrack(roomId, video.youtubeId(), video.title(), nextOrder(roomId),
                         QueueSource.AUTOPLAY));

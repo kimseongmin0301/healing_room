@@ -15,6 +15,14 @@ class YouTubeSearchClientTests {
     }
 
     @Test
+    void searchQueryUsesArtistWhenTitleIsArtistDashSong() {
+        // 곡 제목으로 찾으면 같은 노래의 다른 영상만 나오므로 가수 이름으로 찾는다
+        assertThat(YouTubeSearchClient.searchQuery("The Weeknd & JENNIE - One Of The Girls (Live in Seoul)"))
+                .isEqualTo("The Weeknd & JENNIE");
+        assertThat(YouTubeSearchClient.searchQuery("[MV] 아이유(IU) - 밤편지")).isEqualTo("아이유");
+    }
+
+    @Test
     void unescapesHtmlEntities() {
         assertThat(YouTubeSearchClient.unescape("Rock &amp; Roll &#39;Live&#39;")).isEqualTo("Rock & Roll 'Live'");
     }

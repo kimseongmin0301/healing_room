@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import com.healingroom.domain.queue.util.SongTitles;
 import com.healingroom.domain.recommend.dto.VideoSuggestion;
 
 import tools.jackson.databind.JsonNode;
@@ -102,8 +103,18 @@ public class YouTubeSearchClient {
         }
     }
 
-    /** 제목에서 [괄호], (괄호), | 뒤 채널명 같은 군더더기를 빼고 검색어로 쓴다 */
+    /**
+     * 검색어 만들기. "가수 - 곡" 형태면 가수 이름으로 검색한다(곡 제목으로 찾으면 같은 노래의 다른 영상만 잔뜩 나온다).
+     * 아니면 제목에서 [괄호], (괄호), | 뒤 채널명 같은 군더더기를 빼고 쓴다
+     */
     static String searchQuery(String title) {
+        String artist = SongTitles.artist(title)
+                .replaceAll("[^\\p{L}\\p{N}\\s'&-]", " ")
+                .replaceAll("\\s+", " ")
+                .strip();
+        if (!artist.isEmpty()) {
+            return artist;
+        }
         String q = title.replaceAll("[\\[(【].*?[\\])】]", " ")
                 .replaceAll("[|·•].*$", " ")
                 .replaceAll("[^\\p{L}\\p{N}\\s'&-]", " ")
