@@ -10,6 +10,7 @@ import { enterMixer, leaveMixer, setAmbientEnabled } from './audio/mixer.js';
 import { initChat, enterChat, leaveChat, receiveChat, clearChat, getNickname } from './chat.js';
 import { renderPeople, resetPeople } from './people.js';
 import { initSupport } from './support.js';
+import { initFeedback } from './feedback.js';
 
 const $ = id => document.getElementById(id);
 const scene = new Scene($('scene'));
@@ -235,6 +236,7 @@ addEventListener('hashchange', route);
 initMusic();
 initChat();
 initSupport();
+initFeedback();
 setMusic(musicOn);   // 아직 누르지 않았으면 음소거로 시작하고, 누르는 순간 소리를 낸다
 setAmbient(ambientOn);
 route();

@@ -52,14 +52,44 @@ function render({ totalPeople, rooms }) {
   if (!rooms.length) $('rooms').textContent = '지금 접속해 있는 사람이 없어요.';
 }
 
+const dateText = value => new Date(value).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+// 받은 의견: 글은 textContent 로만 넣는다 (HTML 로 해석하지 않음)
+function renderFeedback(list) {
+  $('feedback-total').textContent = `${list.length}개`;
+  if (!list.length) { $('feedback').textContent = '아직 받은 의견이 없어요.'; return; }
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th>받은 시각</th><th>내용</th><th>보낸 사람</th><th></th></tr></thead>';
+  const body = document.createElement('tbody');
+  for (const f of list) {
+    const tr = document.createElement('tr');
+    const remove = Object.assign(document.createElement('button'), { className: 'btn', type: 'button', textContent: '지우기' });
+    remove.onclick = async () => {
+      if (!confirm('이 의견을 지울까요?')) return;
+      const res = await fetch(`/api/admin/feedback/${f.id}`, { method: 'DELETE', headers: { 'X-Admin-Token': getToken() } });
+      if (!res.ok) $('status').textContent = (await res.json().catch(() => null))?.message ?? `지우지 못했어요 (${res.status})`;
+      load();
+    };
+    const action = document.createElement('td');
+    action.append(remove);
+    tr.append(cell(dateText(f.createdAt)), cell(f.message, 'text'), cell(f.visitor, 'mono'), action);
+    body.append(tr);
+  }
+  table.append(body);
+  $('feedback').replaceChildren(table);
+}
+
 async function load() {
   const token = getToken();
   if (!token) return;
   try {
-    const res = await fetch('/api/admin/presence', { headers: { 'X-Admin-Token': token } });
+    const headers = { 'X-Admin-Token': token };
+    const [res, feedbackRes] = await Promise.all([
+      fetch('/api/admin/presence', { headers }), fetch('/api/admin/feedback', { headers })]);
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.message ?? `불러오지 못했어요 (${res.status})`);
     render(data);
+    if (feedbackRes.ok) renderFeedback(await feedbackRes.json());
   } catch (e) {
     $('status').textContent = e.message;
     $('rooms').replaceChildren();
@@ -83,6 +113,8 @@ $('logout').addEventListener('click', () => {
   setToken('');
   clearInterval(timer);
   $('rooms').replaceChildren();
+  $('feedback').replaceChildren();
+  $('feedback-total').textContent = '';
   $('status').textContent = '키를 지웠어요.';
 });
 

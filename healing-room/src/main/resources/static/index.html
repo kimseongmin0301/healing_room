@@ -164,6 +164,20 @@
         <p>네, 휴대폰과 태블릿 브라우저에서도 돼요. 브라우저 정책 때문에 화면을 한 번 누른 뒤에 소리가 나요.</p></details>
     </section>
 
+    <!-- 의견 보내기 (로비에만). 익명이며 관리자 화면에서만 본다 -->
+    <section class="feedback" aria-labelledby="feedback-title">
+      <h2 id="feedback-title">💬 힐링룸에 바라는 점이 있나요?</h2>
+      <p class="hint-text">원하는 테마, 불편한 점, 고마운 말 뭐든 좋아요. 이름 없이 보내지고 만든 사람만 읽어요.</p>
+      <form id="feedback-form" class="feedback-form">
+        <textarea id="feedback-text" maxlength="1000" rows="3" placeholder="예) 밤하늘 테마도 있으면 좋겠어요"></textarea>
+        <div class="feedback-row">
+          <span id="feedback-count" class="hint-text">0 / 1000</span>
+          <p id="feedback-msg" class="msg" role="status"></p>
+          <button class="btn primary" type="submit">보내기</button>
+        </div>
+      </form>
+    </section>
+
     <!-- 방 만들기 -->
     <div id="create-dialog" class="dialog-backdrop" hidden>
       <form id="create-form" class="dialog panel" novalidate>

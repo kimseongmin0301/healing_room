@@ -92,6 +92,12 @@
       │  │  ├─ repository/          RecommendRepository (JdbcClient 집계 SQL: 테마 인기곡, 함께 신청된 곡)
       │  │  ├─ client/              YouTubeSearchClient (비슷한 영상·직접 검색, 12시간 캐시, 할당량 소진 감지)
       │  │  └─ dto/                 RecommendationResponse, VideoSuggestion, SearchResult
+      │  ├─ feedback/               ← 로비 의견 보내기 (익명)
+      │  │  ├─ controller/          FeedbackController       POST /api/feedback
+      │  │  ├─ service/             FeedbackService (입력 정리, 한 브라우저 10분에 3번·전체 1시간에 60번, 관리자 조회·삭제)
+      │  │  ├─ repository/ entity/  FeedbackRepository, Feedback
+      │  │  ├─ dto/                 FeedbackRequest, FeedbackResponse (방문자 id 앞 8자리만)
+      │  │  └─ exception/           FeedbackException
       │  ├─ admin/                  ← 관리자 (ADMIN_TOKEN 으로 보호)
       │  │  ├─ controller/          AdminController          GET /api/admin/presence
       │  │  ├─ service/             AdminService (키 확인, 모든 방 접속자·전체 IP)
@@ -174,6 +180,7 @@ cd healing-room
 | `V5__theme_and_rooms.sql` | room→theme, room_ambient→theme_ambient, room_playlist→theme_track 로 이름 변경. 새 room(사용자 방) 테이블, 기본 방 cabin·sea 생성, 대기열에 paused_at·queue_order 추가 | ✅ |
 | `V7__more_themes.sql` | 새 테마 8개 (행만 추가): 환경음, 임베드 재생 확인한 기본 음악 | ✅ |
 | `V8__default_rooms_for_all_themes.sql` | 새 테마 8개의 기본 방 (id: forest, rain, cafe, snow, sunset, space, galaxy, club) | ✅ |
+| `V9__feedback.sql` | 로비 의견 보내기 `feedback` 테이블 (익명, IP·연락처 없음) | ✅ |
 
 > V1~V4 파일 안의 `room` 은 지금의 `theme` 입니다(V5 에서 이름이 바뀜).
 
@@ -242,6 +249,8 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | POST | `/api/rooms/{roomId}/chat` | 채팅 보내기 `{ "nickname", "text" }` → 201. 10초에 6개 넘으면 429, Redis 장애 시 503 |
 | POST | `/api/rooms/{id}/reset` | **기본 방의 방장** 기록 초기화 (지난 신청곡·투표·통계·채팅) → 204, 아니면 403 |
 | POST | `/api/admin/reset?roomId=` | **관리자** 기록 초기화. roomId 가 없으면 모든 방 + YouTube 검색 캐시 |
+| POST | `/api/feedback` | 로비 의견 보내기 `{ "message" }` (1~1000자) → 201. 한 브라우저 10분에 3번·사이트 전체 1시간에 60번 넘으면 429 |
+| GET · DELETE | `/api/admin/feedback`, `/api/admin/feedback/{id}` | **관리자** 받은 의견 최근 200개 / 지우기 |
 | GET | `/api/admin/presence` | **관리자** (`X-Admin-Token`) 모든 방 접속자: 닉네임, 전체 IP, 방문자 id 앞 8자리, 들어온 시각 |
 | WS | `/ws/rooms/{roomId}?visitorId={uuid}&nickname={닉네임}` | 연결돼 있는 동안 "방에 있음". 서버 → `state`(음악), `chat`(새 채팅), `presence`(접속자 목록). 브라우저 → `{"type":"nickname","nickname":"…"}`(닉네임 변경). 닫힌 방이면 연결 거부 |
 

@@ -18,6 +18,7 @@
     .admin section { margin-top: 26px; }
     .admin h2 { font-size: 17px; margin: 0; }
     .admin h2 small { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 6px; }
+    .admin td.text { white-space: pre-wrap; word-break: break-word; }
   </style>
 </head>
 <body>
@@ -35,6 +36,12 @@
       <span class="msg">지난 신청곡·투표·인기곡 통계·채팅·추천 캐시를 지우고, 사람이 있는 방은 기본 음악부터 다시 틀어요.</span>
     </div>
     <div id="rooms"></div>
+
+    <section>
+      <h2>받은 의견 <small id="feedback-total"></small></h2>
+      <p class="msg">로비에서 보낸 의견이에요 (최근 200개). 장난·도배는 지울 수 있어요.</p>
+      <div id="feedback"></div>
+    </section>
   </main>
   <script type="module" src="/js/admin.js"></script>
 </body>
