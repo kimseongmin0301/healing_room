@@ -14,7 +14,7 @@
 **힐링룸(Healing Room)**: 불멍, 바다멍 같은 테마를 골라 방을 만들고, 실사 배경, 움직이는 효과, 환경음, **함께 듣는 YouTube 음악**으로 쉬는 웹 서비스입니다.
 
 - **로그인이 없습니다(만들지 않음).** 브라우저마다 UUID(방문자 id)를 만들어 localStorage에 두고 씁니다.
-- **테마(theme)**는 배경, 효과, 환경음, 기본 음악의 묶음입니다. **방(room)**은 누구나 이름과 테마를 골라 만들 수 있고, 아무도 없는 채로 **30분**이 지나면 닫힙니다. **기본 방**(cabin, sea)은 닫히지 않습니다. 테마는 10개(cabin, sea, forest, forest-rain, rain-cafe, snow-cabin, sunset-beach, space-station, space-nebula, lounge-club)이고, 기본 방이 없는 테마는 방 만들기에서 고릅니다.
+- **테마(theme)**는 배경, 효과, 환경음, 기본 음악의 묶음입니다. **방(room)**은 누구나 이름과 테마를 골라 만들 수 있고, 아무도 없는 채로 **30분**이 지나면 닫힙니다. **기본 방**은 테마마다 하나씩 있고 닫히지 않습니다. 테마 10개와 기본 방 id: cabin, sea, forest, forest-rain→`rain`, rain-cafe→`cafe`, snow-cabin→`snow`, sunset-beach→`sunset`, space-station→`space`, space-nebula→`galaxy`, lounge-club→`club` (방 id 는 12자 제한, 주소 `/#id`).
 - **방장** = 지금 방에 있는 사람 중 가장 먼저 들어온 사람(보통 방을 만든 사람). 방장이 나가면 그다음에 들어온 사람이 방장이 됩니다. 새로고침처럼 20초 안에 돌아오면 자리를 지켜 줍니다.
 - 같은 방에 있는 사람은 **같은 곡을 같은 위치로** 듣습니다(라디오처럼 동기화). 영상은 직접 조작할 수 없고, **방장만** 모두의 재생을 멈추고/이어 틀고/위치를 옮길 수 있습니다.
 - 누구나 YouTube 링크로, 또는 **직접 검색**해서 곡을 신청할 수 있습니다(개수 제한 없음. 검색은 한 사람이 1분에 5번). 대기열이 비면 **방금 나온 곡과 비슷한 영상이 자동으로 이어지고(자동 추천)**, 추천을 못 찾으면 테마 기본 음악이 나옵니다. 자동으로 넣은 곡(기본 음악·자동 추천)은 누구나 바로 넘길 수 있고, 신청곡이 들어오면 바로 바뀝니다.
@@ -172,7 +172,8 @@ cd healing-room
 | `V4__replace_default_tracks.sql` | 기본 음악 교체 (임베드 가능한 영상으로) | ✅ |
 | `V6__queue_item_source.sql` | 대기열에 source(request/default/autoplay) 추가 | ✅ |
 | `V5__theme_and_rooms.sql` | room→theme, room_ambient→theme_ambient, room_playlist→theme_track 로 이름 변경. 새 room(사용자 방) 테이블, 기본 방 cabin·sea 생성, 대기열에 paused_at·queue_order 추가 | ✅ |
-| `V7__more_themes.sql` | 새 테마 8개 (행만 추가, 기본 방 없음): 환경음, 임베드 재생 확인한 기본 음악 | ✅ |
+| `V7__more_themes.sql` | 새 테마 8개 (행만 추가): 환경음, 임베드 재생 확인한 기본 음악 | ✅ |
+| `V8__default_rooms_for_all_themes.sql` | 새 테마 8개의 기본 방 (id: forest, rain, cafe, snow, sunset, space, galaxy, club) | ✅ |
 
 > V1~V4 파일 안의 `room` 은 지금의 `theme` 입니다(V5 에서 이름이 바뀜).
 
@@ -295,6 +296,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 원본 PNG 는 저장소에 넣지 말고 webp 로 바꿔 넣습니다 (방 만들기 화면에서 모든 테마 배경을 미리보기로 불러옴).
 - 환경음을 추가하려면 `audio/sounds.js`의 `SOUNDS`에 키를 추가하고, 같은 키를 `theme_ambient.sound`에 씁니다.
 - 브라우저 저장소(localStorage)는 `api.js`의 `store`를 쓰세요(실패해도 무시).
+- **소개 페이지(SEO/AEO/GEO)**: `themes/{기본 방 id}.html`(테마 10개), `themes/index.html`, `about.html`, `images/og/{id}.jpg`, `sitemap.xml` 은 **`scripts/seo_pages.py` 로 만든 결과물**입니다. 직접 고치지 말고 스크립트의 `THEMES` 등을 고친 뒤 `python scripts/seo_pages.py` 로 다시 만들어 함께 커밋하세요(Pillow·맑은 고딕 필요). `/themes/` 주소는 `StaticPageConfig` 가 `themes/index.html` 로 연결합니다. 테마를 추가하면 스크립트와 `llms.txt` 에도 넣습니다.
 - **검색·AI 노출(SEO/AEO)**: `index.html` 의 og 메타 태그·JSON-LD(WebSite, WebApplication, FAQPage), 로비 아래 소개·자주 묻는 질문(`.about`), `robots.txt`·`sitemap.xml`·`llms.txt`. **FAQ 를 바꾸면 JSON-LD 의 FAQPage 도 같은 내용으로** 바꾸고, 기능이 바뀌면 `llms.txt` 도 고치세요. 테마를 추가하면 `.about-themes` 와 JSON-LD `featureList` 에도 넣습니다.
 - **소리는 음악과 환경음을 따로 켜고 끕니다** (`app.js`의 `setMusic`, `setAmbient`).
   - 음악이 소리를 내며 재생되기 시작하면 환경음을 자동으로 끄고("환경음 쉬는 중"), 음악을 끄거나 멈추면 자동으로 껐던 환경음만 다시 켭니다. 곡 사이 잠깐 끊김에 깜빡이지 않도록 멈춤은 4초 기다렸다 알립니다(`music.js`의 `onMusicAudible`).

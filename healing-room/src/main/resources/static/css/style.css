@@ -53,6 +53,9 @@ body:not(.in-room) canvas { display: none; }
 .about h2 + p { margin: 0 0 16px; max-width: 760px; }
 .about-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 20px; margin: 0 0 32px; padding: 0; list-style: none; }
 .about-themes b { color: var(--text); font-weight: 600; margin-right: 6px; }
+.about-themes a { text-decoration: none; }
+.about-links { margin: -16px 0 32px; }
+.about-links a { color: var(--accent); }
 .about details { max-width: 760px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .about summary { cursor: pointer; color: var(--text); }
 .about details p { margin: 8px 0 0; }
