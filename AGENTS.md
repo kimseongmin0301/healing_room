@@ -13,7 +13,7 @@
 
 **힐링룸(Healing Room)**: 불멍, 바다멍 같은 테마를 골라 방을 만들고, 실사 배경, 움직이는 효과, 환경음, **함께 듣는 YouTube 음악**으로 쉬는 웹 서비스입니다.
 
-- **로그인이 없습니다(만들지 않음).** 브라우저마다 UUID(방문자 id)를 만들어 localStorage에 두고 씁니다.
+- **방문자 로그인은 없습니다(만들지 않음).** 브라우저마다 UUID(방문자 id)를 만들어 localStorage에 두고 씁니다. 로그인은 **관리자 화면에만** 있습니다(로그인 + 관리자 키 2단계).
 - **테마(theme)**는 배경, 효과, 환경음, 기본 음악의 묶음입니다. **방(room)**은 누구나 이름과 테마를 골라 만들 수 있고, 아무도 없는 채로 **30분**이 지나면 닫힙니다. **기본 방**은 테마마다 하나씩 있고 닫히지 않습니다. 테마 10개와 기본 방 id: cabin, sea, forest, forest-rain→`rain`, rain-cafe→`cafe`, snow-cabin→`snow`, sunset-beach→`sunset`, space-station→`space`, space-nebula→`galaxy`, lounge-club→`club` (방 id 는 12자 제한, 주소 `/{id}` 예: `/cafe`). 로비에는 불멍·바다멍(`room.featured`)과 사용자 방, 사람이 있는 기본 방만 보입니다(`RoomService.findLobby`).
 - **방장** = 지금 방에 있는 사람 중 가장 먼저 들어온 사람(보통 방을 만든 사람). 방장이 나가면 그다음에 들어온 사람이 방장이 됩니다. 새로고침처럼 20초 안에 돌아오면 자리를 지켜 줍니다.
 - 같은 방에 있는 사람은 **같은 곡을 같은 위치로** 듣습니다(라디오처럼 동기화). 영상은 직접 조작할 수 없고, **방장만** 모두의 재생을 멈추고/이어 틀고/위치를 옮길 수 있습니다.
@@ -21,7 +21,9 @@
 - 넘기기/빼기: **내 신청곡**과 **방장**은 바로, 그 밖에는 **방 인원의 50%를 넘는(과반) 투표**가 필요합니다. 대기열 순서는 방장만 바꿉니다.
 - 곡 추천: 내 신청 기록(브라우저), YouTube에서 찾은 비슷한 영상(API 키 필요), 함께 신청된 곡, 테마 인기곡.
 - 영상 자막은 끕니다. 자동 추천은 같은 노래의 다른 영상(공식 MV·라이브·가사 영상)을 다시 고르지 않습니다.
-- **접속자 목록**: 방 사람 수와 닉네임, **앞부분만 보이는 IP**(`203.0.*.*`)를 모두에게 보여줍니다. 전체 IP 는 관리자 화면(`/admin`, `ADMIN_TOKEN`)에서만 봅니다.
+- **접속자 목록**: 방 사람 수와 닉네임, **앞부분만 보이는 IP**(`203.0.*.*`)를 모두에게 보여줍니다. 전체 IP 는 관리자 화면(`/admin`)에서만 봅니다.
+- **주소**: `.html`·`#` 없이 `/{방id}`, `/themes`, `/themes/{방id}`, `/about`, `/admin`. 없거나 닫힌 방·없는 주소는 404 안내 화면(5초 뒤 `/`).
+- **의견 보내기**: 로비 맨 아래에서 익명으로(관리자 화면에서만 읽음). **서버비 후원**: 위쪽 가운데 ☕ 버튼(카카오페이 QR).
 - **방 채팅**: 닉네임은 자동으로 붙고("졸린 고양이" 같은) 바꿀 수 있습니다(브라우저에 저장). 메시지는 Redis에 방마다 최근 100개를 보관하고, 사용자 방은 닫힐 때 지우며 기본 방은 최근 24시간만 보여줍니다.
 
 ## 2. 기술 스택
@@ -42,9 +44,10 @@
 
 ```
 /                                   ← 저장소 루트
-├─ AGENTS.md / CLAUDE.md / README.md
+├─ AGENTS.md / CLAUDE.md / README.md / .editorconfig (모든 파일 UTF-8)
 ├─ docs/screenshots/               ← README 화면 캡처 (화면이 바뀌면 다시 찍기), themes.jpg 는 테마 배경 모음
 ├─ docs/theme-image-prompts.md     ← 새 테마 배경 이미지를 ChatGPT 에 요청할 때 첨부하는 요청서
+├─ scripts/                         ← seo_pages.py (소개 페이지·미리보기 이미지·sitemap 생성), admin_password.py (관리자 비밀번호 → 해시)
 ├─ deploy/                          ← 운영 서버 배포 (systemd, nginx, 설치·배포 스크립트). 11절
 ├─ design/                          ← 디자인 시안(SVG/PNG), 초기 프로토타입(live/)
 └─ healing-room/                    ← Spring Boot 앱 (Gradle 프로젝트 루트)
@@ -100,11 +103,12 @@
       │  │  ├─ repository/ entity/  FeedbackRepository, Feedback
       │  │  ├─ dto/                 FeedbackRequest, FeedbackResponse (방문자 id 앞 8자리만)
       │  │  └─ exception/           FeedbackException
-      │  ├─ admin/                  ← 관리자: ① 로그인(AdminLoginService, 쿠키) ② 요청마다 ADMIN_TOKEN. /admin 은 로그인 전 pages/admin-login.html
-      │  │  ├─ controller/          AdminController          GET /api/admin/presence
-      │  │  ├─ service/             AdminService (키 확인, 모든 방 접속자·전체 IP)
-      │  │  ├─ dto/                 AdminPresenceResponse
-      │  │  └─ exception/           AdminException (키 없음 404, 틀림 401)
+      │  ├─ admin/                  ← 관리자: ① 로그인(쿠키 HR_ADMIN) ② 요청마다 X-Admin-Token. /admin 은 로그인 전 pages/admin-login.html
+      │  │  ├─ controller/          AdminController          /api/admin/login·logout·presence·feedback·reset
+      │  │  ├─ service/             AdminLoginService (아이디·비밀번호 해시 PBKDF2, IP 5번 틀리면 15분 잠금, 로그인 8시간, 메모리),
+      │  │  │                       AdminService (관리자 키 확인, 모든 방 접속자·전체 IP)
+      │  │  ├─ dto/                 AdminLoginRequest, AdminPresenceResponse
+      │  │  └─ exception/           AdminException (설정 없음 404, 키·로그인 틀림 401, 잠금 429)
       │  └─ presence/               ← 방 접속(누가 어느 방에 있는지, 방장, 닉네임, IP)
       │     ├─ handler/             RoomSocketHandler (WebSocket 연결/해제, 상태·접속자 전송, 닉네임 변경 수신),
       │     │                       ClientIpHandshakeInterceptor (nginx 뒤에서 X-Forwarded-For 로 실제 IP)
@@ -112,14 +116,19 @@
       │     ├─ util/                IpMask (203.0.*.*)
       │     └─ service/             RoomSessionRegistry (방별 접속자·들어온 순서·방장, 메모리), RoomBroadcaster (방 사람들에게 각자 기준으로 전송)
       └─ global/
-         ├─ config/                 WebSocketConfig, RedisConfig (채팅 pub/sub 구독)
+         ├─ config/                 WebSocketConfig, RedisConfig (채팅 pub/sub 구독), TextFileCharsetFilter (.txt 를 UTF-8 로)
+         ├─ util/                   ClientRequest (nginx 뒤에서 실제 IP·https 여부, 루프백에서 온 헤더만 믿음)
          └─ exception/              ApiException(공통 부모), GlobalExceptionHandler (→ { "message": ... })
 
    src/main/resources/
       ├─ application.properties
+      ├─ pages/                     ← SiteController 가 깔끔한 주소로 보여주는 페이지 (정적 파일로 바로 나가지 않음)
+      │                               themes/{방id}.html·themes/index.html·about.html (seo_pages.py 결과물), admin.html, admin-login.html
       └─ static/                    ← 프론트엔드 (서버가 그대로 서빙)
          ├─ index.html (링크 미리보기 og 메타 태그 포함), favicon.ico, css/style.css
-         ├─ images/                 테마 배경(webp), 마스코트(mascot*.webp), og-cat.jpg(링크 미리보기 1200×630), 아이콘, support-qr.png
+         ├─ images/                 테마 배경(webp), 마스코트(mascot*.webp), og-cat.jpg·og/{방id}.jpg(링크 미리보기 1200×630), 아이콘, support-qr.png
+         ├─ error/                  404.html·4xx.html·5xx.html (오류 안내, 5초 뒤 /)
+         ├─ robots.txt·sitemap.xml·llms.txt  검색엔진·AI 수집기용
          └─ js/
             ├─ app.js               진입점: 주소 /{방id} 라우팅(history API, 예전 /#id 는 바꿔 줌, 로비 ↔ 방), 애니메이션 루프
             ├─ api.js               fetch 래퍼, 방문자 id(UUID), localStorage 도우미
@@ -128,7 +137,8 @@
             ├─ music.js             YouTube 플레이어 동기화(자막 끄기), 방장 조작, 대기열/지난 신청곡/추천/검색 탭, 내 신청 기록, 창 최소화·최대화
             ├─ chat.js              채팅 창 (지난 대화, 보내기, 실시간 수신, 닉네임, 접기·안 읽은 수)
             ├─ people.js            함께 있는 사람 목록 (닉네임, 가린 IP, 방장 👑)
-            ├─ admin.js             관리자 화면 (static/admin)
+            ├─ admin.js             관리자 화면 (pages/admin.html: 관리자 키, 접속자, 받은 의견, 초기화, 로그아웃)
+            ├─ feedback.js          로비 의견 보내기
             ├─ support.js           위쪽 ☕ 서버비 후원 버튼 → 카카오페이 QR 창
             ├─ scene.js             캔버스 공통 도구 (cover 맞춤, 좌표 변환, wobble, glow, 배경 영상)
             ├─ audio/sounds.js      환경음 합성 (fire, wind, rain, waves, crickets, stream, thunder, hum, pad, city, seagulls, beat)
@@ -223,8 +233,8 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | `REDIS_USERNAME`, `REDIS_PASSWORD` | 전용 계정 `healing_room` (6절) |
 | `REDIS_DATABASE` | Redis DB 번호 (1) |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | 관리자 로그인(1단계). 비밀번호는 원문 대신 `python scripts/admin_password.py` 로 만든 해시(`pbkdf2_sha256$…`)만 넣음. 비면 관리자 기능 전체가 꺼짐(404) |
-| `ADMIN_TOKEN` | 관리자 화면(`/admin`) 키. 비워 두면 관리자 기능이 꺼짐(404). 전체 IP 가 보이므로 길고 무작위로 |
-| `YOUTUBE_API_KEY` | YouTube Data API v3 키. "비슷한 영상" 추천·자동 추천·직접 검색에 쓰며, 비워 두면 그 기능만 꺼짐. 검색 1번 = 하루 할당량 10,000 중 100 (직접 검색은 +1). 할당량을 다 쓰면 태평양 시간 자정(한국 오후 4~5시)까지 쉼 |
+| `ADMIN_TOKEN` | 관리자 키(2단계, 로그인 뒤 요청마다). 비워 두면 관리자 기능이 꺼짐(404). 전체 IP 가 보이므로 길고 무작위로 |
+| `YOUTUBE_API_KEY` | YouTube Data API v3 키. "비슷한 영상" 추천·자동 추천·직접 검색에 쓰며, 비워 두면 그 기능만 꺼짐. **하루 검색 약 100번**(할당량 10,000 중 검색 1번 100, 그리고 `Search Queries per day` 100번 한도). 다 쓰면(403 또는 429) 태평양 시간 자정(한국 오후 4~5시)까지 YouTube 를 부르지 않음 |
 
 `.env`는 절대 커밋하지 마세요. 새 키를 추가하면 `.env.example`도 함께 고치세요.
 
@@ -236,12 +246,12 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/api/themes` | 테마 목록 (방 만들기에서 고름) |
-| GET | `/api/rooms` | 열려 있는 방 목록 (기본 방 먼저) + 테마 + 현재 인원(`listeners`) |
+| GET | `/api/rooms` | **로비에 보일** 방 목록 (`featured` 기본 방·사용자 방·사람 있는 기본 방, 기본 방 먼저) + 테마 + 현재 인원(`listeners`) |
 | POST | `/api/rooms` | 방 만들기 `{ "name", "themeId" }` → 201. 이름 1~30자, 한 사람이 동시에 3개까지 |
 | GET | `/api/rooms/{id}` | 방 정보(테마 포함) + 환경음 목록(`ambients`). 닫힌 방은 404 |
 | GET | `/api/rooms/{roomId}/queue` | 음악 상태 (재생 중 곡, 대기열, 인원, 필요한 표 수, `hostIsMe`) |
 | GET | `/api/rooms/{roomId}/queue/history` | 지난 신청곡 최근 30곡 (played/skipped/removed) |
-| POST | `/api/rooms/{roomId}/queue` | 곡 신청 `{ "url": "YouTube 링크 또는 id" }` → 201 `{ "id", "youtubeId", "title" }` |
+| POST | `/api/rooms/{roomId}/queue` | 곡 신청 `{ "url": "YouTube 링크 또는 id" }` → 201 `{ "id", "youtubeId", "title" }`. oEmbed 401·403 → 422 "다른 사이트 재생 막힘", 400·404 → 422 "없거나 비공개" (실패한 영상 id·이유는 서버 로그에) |
 | PUT | `/api/rooms/{roomId}/queue/{itemId}/vote` | 넘기기/빼기 (내 곡이거나 방장이면 바로, 아니면 투표) → `{ "applied": bool }` |
 | DELETE | `/api/rooms/{roomId}/queue/{itemId}/vote` | 투표 취소 |
 | PUT | `/api/rooms/{roomId}/queue/{itemId}/duration` | 플레이어가 알아낸 영상 길이 `{ "seconds" }` |
@@ -256,8 +266,21 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | POST | `/api/feedback` | 로비 의견 보내기 `{ "message" }` (1~1000자) → 201. 한 브라우저 10분에 3번·사이트 전체 1시간에 60번 넘으면 429 |
 | GET · DELETE | `/api/admin/feedback`, `/api/admin/feedback/{id}` | **관리자** 받은 의견 최근 200개 / 지우기 |
 | POST | `/api/admin/login`, `/api/admin/logout` | 관리자 로그인 `{ username, password }` → 쿠키 `HR_ADMIN`(HttpOnly·Secure·SameSite=Strict, 8시간). 한 IP 5번 틀리면 15분 429 |
-| GET | `/api/admin/presence` | **관리자** (`X-Admin-Token`) 모든 방 접속자: 닉네임, 전체 IP, 방문자 id 앞 8자리, 들어온 시각 |
+| GET | `/api/admin/presence` | **관리자** (로그인 쿠키 + `X-Admin-Token`) 모든 방 접속자: 닉네임, 전체 IP, 방문자 id 앞 8자리, 들어온 시각 |
 | WS | `/ws/rooms/{roomId}?visitorId={uuid}&nickname={닉네임}` | 연결돼 있는 동안 "방에 있음". 서버 → `state`(음악), `chat`(새 채팅), `presence`(접속자 목록). 브라우저 → `{"type":"nickname","nickname":"…"}`(닉네임 변경). 닫힌 방이면 연결 거부 |
+
+### 화면 주소 (SiteController)
+| 주소 | 보여주는 것 |
+|---|---|
+| `/` | `static/index.html` (스프링 기본 첫 화면) |
+| `/{방id}` (`[a-z0-9][a-z0-9-]{0,11}`) | 열린 방이면 `static/index.html`(화면이 주소를 보고 입장), 아니면 404 |
+| `/about`, `/themes`, `/themes/{방id}` | `pages/` 의 소개 페이지 (없으면 404) |
+| `/admin` | 로그인 전 `pages/admin-login.html`, 로그인 후 `pages/admin.html`. 로그인 설정이 없으면 404 |
+| `/about.html`, `/admin.html`, `/themes/index.html`, `/themes/{id}.html` | 301 로 새 주소 (`/index.html` 은 넣지 않음: 스프링이 `/` 를 보여줄 때 안에서 넘기므로 무한 이동) |
+
+- 고정 주소가 방 주소 규칙보다 먼저 맞습니다. 방 id 는 소문자·숫자(사용자 방 8자)라 `about`·`themes`·`admin` 과 겹치지 않습니다.
+- 화면(`app.js`)은 history API 로 주소를 바꾸고(`go`), 예전 `/#방id` 로 들어오면 `/방id` 로 다시 열어 서버가 확인하게 합니다.
+- 오류 화면은 `static/error/404.html`·`4xx.html`·`5xx.html` (스프링이 상태 코드로 고름). API 오류는 그대로 JSON.
 
 ### 함께 듣는 음악 동작 (QueueService)
 - 곡 신청 시 oEmbed로 영상 확인·제목 조회 → 대기열 맨 뒤. 기본 음악이 나오는 중이면 바로 신청곡으로 넘어갑니다.
@@ -279,13 +302,23 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 신청 칸에 링크가 아닌 말을 넣으면 검색합니다(`music.js` 의 `looksLikeLink`). 결과는 "검색" 탭에 썸네일·채널·길이와 함께 나오고 눌러서 신청합니다.
 - `search`(100) + `videos`(1) 로 찾고, 외부 재생 가능(`status.embeddable`)·라이브 아님(길이 0 제외)·한국 차단 아님(`regionRestriction.blocked`)만 돌려줍니다.
 - 방에 접속해 있는 사람만, 한 사람이 1분에 5번(`healing-room.youtube.search-per-minute`). 같은 검색어는 12시간 캐시.
-- 하루 할당량을 다 쓰면(403 quota) 태평양 시간 자정까지 YouTube 를 부르지 않고 503 "링크로 신청해 주세요". 자동 추천·비슷한 영상도 같은 표시를 보고 쉽니다.
+- 하루 한도를 다 쓰면(403 quotaExceeded 또는 429 `Search Queries per day`, `YouTubeSearchClient.isQuotaError`) 태평양 시간 자정까지 YouTube 를 부르지 않고 503 "링크로 신청해 주세요". 자동 추천·비슷한 영상도 같은 표시를 보고 쉽니다.
 
 ### 곡 추천 (RecommendService)
 - **내가 자주 신청한 곡**: 서버가 아니라 브라우저 `localStorage.myRequests`(최대 100곡, 신청 횟수·마지막 시각)에 저장합니다.
 - **비슷한 영상**: YouTube Data API `search`로 검색합니다(YouTube가 "연관 영상" 검색을 없애서). 제목이 "가수 - 곡"이면 **가수 이름**으로, 아니면 정리한 제목으로 찾습니다(곡 제목으로 찾으면 같은 노래의 다른 영상만 나와서). 조건: `videoEmbeddable=true`, `videoCategoryId=10`(음악), 라이브·예정 방송(`liveBroadcastContent != none`) 제외 — 라이브는 다른 사이트에서 재생이 막히는 경우가 많아서입니다. 같은 곡은 12시간 캐시합니다. 키가 없거나 할당량 초과·오류면 빈 목록이고 나머지 추천은 그대로 나옵니다.
 - **함께 신청된 곡**: 같은 방에서 앞뒤 3시간 안에 함께 신청된 곡 (함께 신청된 방이 많은 순).
 - **테마 인기곡**: 같은 테마의 방들에서 최근 30일 동안 많이 신청된 곡. 기본 음악은 세지 않습니다.
+
+### 관리자 (AdminLoginService, AdminService)
+- 2단계: ① `POST /api/admin/login` → 쿠키 `HR_ADMIN`(HttpOnly·Secure(https 일 때)·SameSite=Strict·8시간) ② 관리자 API 마다 `X-Admin-Token` 헤더. 둘 다 맞아야 합니다(`AdminController.authorize`).
+- 비밀번호는 원문을 두지 않고 `ADMIN_PASSWORD_HASH`(`pbkdf2_sha256$반복$소금$해시`, `scripts/admin_password.py`)만. 아이디가 틀려도 해시 계산을 똑같이 해서 걸린 시간으로 아이디를 알 수 없게 합니다.
+- 한 IP(`ClientRequest.ip`) 5번 틀리면 15분 429. 로그인 표·잠금은 서버 메모리라 재시작하면 다시 로그인합니다.
+- `ADMIN_USERNAME`·`ADMIN_PASSWORD_HASH` 가 비면 `/admin` 과 관리자 API 전체가 404, `ADMIN_TOKEN` 이 비면 관리자 API 가 404.
+
+### 의견 보내기 (FeedbackService)
+- `POST /api/feedback` 익명. 제어 문자 정리, 1~1000자. 한 브라우저(방문자 id) 10분에 3번, 사이트 전체 1시간에 60번(방문자 id 는 바꿀 수 있어 전체 한도도 둠). IP·연락처 저장 안 함.
+- 관리자 화면에서 최근 200개 보기·지우기. 화면은 `textContent` 로만 넣습니다.
 
 ### 접속자 목록과 IP (presence)
 - WebSocket 연결 때 `ClientIpHandshakeInterceptor` 가 IP 를 세션에 남깁니다. 요청이 루프백(nginx)에서 왔을 때만 `X-Forwarded-For` 첫 주소를 믿고, 밖에서 직접 온 요청의 헤더는 무시합니다(위조 방지).
@@ -306,12 +339,13 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
   }
   ```
 - 좌표는 **배경 기준 0~1 비율(u, v)**로 쓰고, `scene.P(u, v)`로 화면 좌표로 바꿉니다. 크기는 `scene.k`(원본 대비 배율)를 곱합니다. 배경이 영상이면 `wobble`은 자동으로 꺼집니다.
-- 테마를 추가하는 순서: ① `static/images/`에 배경 추가(webp, 1672×941) → ② `db/V{n}__...sql`로 theme, theme_ambient, theme_track 행 추가(기본 방이 필요할 때만 room, is_default=true) → ③ `effects/{effect}.js` 작성(`parts.js` 조각 활용)
+- 테마를 추가하는 순서: ① `static/images/`에 배경 추가(webp, 1672×941) → ② `db/V{n}__...sql`로 theme, theme_ambient, theme_track, 기본 방 room(is_default=true, 짧은 id, 로비에 늘 보일 거면 featured=true) 행 추가 후 **배포 전에** 실행 → ③ `effects/{effect}.js` 작성(`parts.js` 조각 활용) → ④ `scripts/seo_pages.py` 의 `THEMES` 에 소개 글 추가 후 실행, `llms.txt`·`index.html`(`.about-themes`, JSON-LD) 갱신
 - 원본 PNG 는 저장소에 넣지 말고 webp 로 바꿔 넣습니다 (방 만들기 화면에서 모든 테마 배경을 미리보기로 불러옴).
 - 환경음을 추가하려면 `audio/sounds.js`의 `SOUNDS`에 키를 추가하고, 같은 키를 `theme_ambient.sound`에 씁니다.
 - 브라우저 저장소(localStorage)는 `api.js`의 `store`를 쓰세요(실패해도 무시).
+- **방 만들기 창 등 `.dialog`** 는 화면보다 길면 창 안에서 스크롤하고 `.dialog-actions`(취소·만들기)는 아래에 붙어 있습니다(휴대폰). 휴대폰에서 테마 선택은 3칸·짧은 이름.
+- 로비 방 카드는 한 쪽(page)에 6·4·2개(`lobby.js` `pageSize`, CSS `.room-page` 열 수와 맞춤), 좌우 버튼으로 넘깁니다.
 - **소개 페이지(SEO/AEO/GEO)**: `resources/pages/themes/{기본 방 id}.html`(테마 10개), `pages/themes/index.html`, `pages/about.html`, `static/images/og/{id}.jpg`, `static/sitemap.xml` 은 **`scripts/seo_pages.py` 로 만든 결과물**입니다. 직접 고치지 말고 스크립트의 `THEMES` 등을 고친 뒤 `python scripts/seo_pages.py` 로 다시 만들어 함께 커밋하세요(Pillow·맑은 고딕 필요). 주소는 `.html` 없이 `SiteController` 가 보여줍니다(`/about`, `/themes`, `/themes/cafe`). 테마를 추가하면 스크립트와 `llms.txt` 에도 넣습니다.
-- **오류 화면**: `static/error/404.html`, `4xx.html`, `5xx.html` (스프링이 상태 코드로 고름). 처음으로 버튼과 5초 뒤 `/` 로 이동. API 오류는 그대로 JSON.
 - **검색·AI 노출(SEO/AEO)**: `index.html` 의 og 메타 태그·JSON-LD(WebSite, WebApplication, FAQPage), 로비 아래 소개·자주 묻는 질문(`.about`), `robots.txt`·`sitemap.xml`·`llms.txt`. **FAQ 를 바꾸면 JSON-LD 의 FAQPage 도 같은 내용으로** 바꾸고, 기능이 바뀌면 `llms.txt` 도 고치세요. 테마를 추가하면 `.about-themes` 와 JSON-LD `featureList` 에도 넣습니다.
 - **소리는 음악과 환경음을 따로 켜고 끕니다** (`app.js`의 `setMusic`, `setAmbient`).
   - 음악이 소리를 내며 재생되기 시작하면 환경음을 자동으로 끄고("환경음 쉬는 중"), 음악을 끄거나 멈추면 자동으로 껐던 환경음만 다시 켭니다. 곡 사이 잠깐 끊김에 깜빡이지 않도록 멈춤은 4초 기다렸다 알립니다(`music.js`의 `onMusicAudible`).
@@ -353,6 +387,10 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - **sudo 가 필요한 설치**(서비스 등록, nginx, 인증서)는 `deploy/install-root.sh` 를 사람이 직접 실행합니다. AI 는 sudo 비밀번호를 다루지 않습니다. 재시작만 `/etc/sudoers.d/healing-room` 으로 비밀번호 없이 허용합니다.
 - nginx 는 **`sites-available/healing.kimseongmin.co.kr` 파일만** 이 앱 것입니다. 기존 메인 도메인 설정 파일은 다른 서비스가 쓰므로 절대 수정하지 마세요. 적용 전에는 항상 `nginx -t`.
 - 운영 서버에 붙은 앱과 **같은 DB 를 쓰는 서버를 로컬에서 동시에 띄우지 마세요**(대기열 스케줄러가 두 번 돕니다). 로컬 개발용 DB 를 따로 두는 게 좋습니다.
+- **엔티티를 바꾸는 배포**는 마이그레이션을 먼저 운영 DB 에 실행한 뒤 푸시합니다(`ddl-auto=validate` 라 순서가 바뀌면 새 버전이 시작을 거부하고 자동 복구됨). 칸·테이블 추가는 이전 버전에 영향이 없습니다.
+- **관리자 설정**(`shared/.env` 의 `ADMIN_USERNAME`·`ADMIN_PASSWORD_HASH`·`ADMIN_TOKEN`)은 사람이 직접 넣습니다. 값은 대화·커밋에 옮겨 적지 않습니다.
+- **DNS**(가비아): `healing` 은 A 기록(서버 IP), 같은 이름에 구글 서치 콘솔 인증 TXT. CNAME 은 다른 기록과 함께 둘 수 없으므로 쓰지 않습니다. 기록을 바꿀 땐 새 기록을 먼저 추가하고 예전 기록을 나중에 지웁니다(비는 순간의 "없음" 답을 최대 하루 저장하는 DNS 가 있음).
+- **검색 등록**: 네이버 서치어드바이저(메타 태그 인증), 구글 서치 콘솔(DNS TXT 인증). 소개 페이지가 바뀌면 sitemap 을 다시 제출합니다. 카카오톡 미리보기는 카카오 공유 디버거에서 캐시 초기화.
 
 ## 12. 로드맵 / 진행 상황
 
@@ -370,5 +408,10 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - [x] 자동 추천 재생 (신청곡이 없으면 비슷한 영상을 이어서)
 - [x] 테마 추가: 숲, 비 오는 숲, 비 오는 카페, 눈 산장, 노을 해변, 우주정거장, 깊은 우주, 라운지 클럽 (V7)
 - [x] 클럽 방 비트 효과 (조명 분당 100박 + 환경음 beat)
+- [x] 곡 직접 검색, 자막 끄기, 자동 추천 개선(기준 곡 여러 개, 같은 노래 거르기)
+- [x] 테마마다 기본 방(V8), 로비는 featured·사용자 방·사람 있는 방만(V10), 방 카드 넘기기
+- [x] 검색엔진·AI 노출 (소개 페이지 14개, JSON-LD, sitemap, llms.txt, 링크 미리보기), 마스코트
+- [x] 깔끔한 주소(SiteController), 404·5xx 안내 화면
+- [x] 의견 보내기(V9), 관리자 로그인 + 관리자 키, 서버비 후원 버튼
 - [ ] 테마별 배경 영상 (선택)
-- 로그인 기능은 **만들지 않습니다** (익명 서비스).
+- 방문자 로그인은 **만들지 않습니다** (익명 서비스). 로그인은 관리자 화면에만 있습니다.
