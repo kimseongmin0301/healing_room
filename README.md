@@ -125,6 +125,7 @@
 ### 관리자 화면 (`/admin`)
 - **두 단계로 잠겨 있어요.** ① 아이디와 **문장 비밀번호**로 로그인 → ② 관리자 키(`ADMIN_TOKEN`)를 한 번 더 넣어요.
 - 모든 방의 접속자와 전체 IP, 내보내기, 받은 의견(지우기 가능), 방별·전체 기록 초기화를 할 수 있어요.
+- **방 관리**: 열려 있는 모든 방의 이름·테마·최대 인원을 바꾸고 방을 없앨 수 있어요. 기본 방은 이름·최대 인원만 바꿀 수 있어요.
 - 로그인은 8시간 유지돼요. 같은 IP에서 5번 틀리면 15분 막혀요. 비밀번호는 원문이 아니라 해시만 서버에 저장해요.
 - 로그인 설정(`ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`)이나 관리자 키가 비어 있으면 관리자 기능 전체가 꺼져요(없는 주소처럼 404).
 
@@ -419,6 +420,7 @@ healing_room/
 | GET | `/api/admin/presence` | 관리자: 모든 방 접속자와 전체 IP |
 | GET · DELETE | `/api/admin/feedback`, `/api/admin/feedback/{id}` | 관리자: 받은 의견 / 지우기 |
 | POST | `/api/admin/kick?roomId=&key=` | 관리자: 내보내기 |
+| GET · PUT · DELETE | `/api/admin/rooms`, `/api/admin/rooms/{id}/settings`, `/api/admin/rooms/{id}` | 관리자: 모든 방 보기 / 설정 바꾸기 / 없애기 |
 | POST | `/api/admin/reset?roomId=` | 관리자: 방별 또는 전체 기록 초기화 |
 | WS | `/ws/rooms/{roomId}?visitorId=…&nickname=…` | 방 접속. 음악 상태, 새 채팅, 접속자 목록을 받아요 |
 

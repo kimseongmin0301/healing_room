@@ -112,9 +112,106 @@ async function load() {
   }
 }
 
+// ---------------------------------------------------------------- 방 관리
+// 5초 갱신에 넣지 않는다 (고치고 있던 칸이 갱신으로 지워지지 않게). 저장·없애기 뒤와 "새로고침"에서만 다시 불러온다
+
+const MAX_CHOICES = [2, 3, 4, 5, 6, 8, 10, 15, 20, 30, 50]; // 방 만들기 창과 같은 선택지
+let themes = [];
+
+function button(text, onClick) {
+  const b = Object.assign(document.createElement('button'), { className: 'btn', type: 'button', textContent: text });
+  b.onclick = onClick;
+  return b;
+}
+
+async function adminRequest(method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: { 'X-Admin-Token': getToken(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.message ?? `처리하지 못했어요 (${res.status})`);
+  return data;
+}
+
+async function loadRooms() {
+  if (!getToken()) return;
+  try {
+    if (!themes.length) themes = await fetch('/api/themes').then(r => r.json());
+    renderRoomAdmin(await adminRequest('GET', '/api/admin/rooms'));
+  } catch (e) {
+    $('room-admin').textContent = e.message;
+  }
+}
+
+async function saveRoom(room, settings) {
+  try {
+    await adminRequest('PUT', `/api/admin/rooms/${encodeURIComponent(room.id)}/settings`, settings);
+    $('status').textContent = `'${settings.name}' 방 설정을 바꿨어요.`;
+  } catch (e) {
+    $('status').textContent = e.message;
+  }
+  loadRooms();
+}
+
+async function deleteRoom(room) {
+  const people = room.listeners ? ` 지금 ${room.listeners}명이 있고, 모두 처음 화면으로 나가요.` : '';
+  if (!confirm(`'${room.name}' 방을 없앨까요?${people} 채팅도 지워지고 되돌릴 수 없어요.`)) return;
+  try {
+    await adminRequest('DELETE', `/api/admin/rooms/${encodeURIComponent(room.id)}`);
+    $('status').textContent = `'${room.name}' 방을 없앴어요.`;
+  } catch (e) {
+    $('status').textContent = e.message;
+  }
+  loadRooms();
+  load();
+}
+
+function renderRoomAdmin(rooms) {
+  $('room-total').textContent = `${rooms.length}개`;
+  const table = document.createElement('table');
+  table.className = 'room-table';
+  table.innerHTML = '<thead><tr><th>주소</th><th>이름</th><th>테마</th><th>최대 인원</th><th>지금</th><th></th></tr></thead>';
+  const body = document.createElement('tbody');
+  for (const room of rooms) {
+    const link = Object.assign(document.createElement('a'), { href: `/${room.id}`, target: '_blank', textContent: `/${room.id}` });
+    const where = document.createElement('td');
+    where.className = 'mono';
+    where.append(link, room.isDefault ? ' (기본 방)' : '');
+
+    const name = Object.assign(document.createElement('input'), { value: room.name, maxLength: 30 });
+    const theme = document.createElement('select');
+    for (const t of themes) theme.append(new Option(t.title ?? t.name, t.id, false, t.id === room.theme.id));
+    theme.disabled = room.isDefault; // 기본 방의 테마는 고정
+    const max = document.createElement('select');
+    max.append(new Option('제한 없음', ''));
+    const choices = [...new Set([...MAX_CHOICES, ...(room.maxPeople ? [room.maxPeople] : [])])].sort((a, b) => a - b);
+    for (const n of choices) max.append(new Option(`${n}명`, String(n), false, n === room.maxPeople));
+
+    const actions = document.createElement('td');
+    actions.className = 'actions';
+    actions.append(button('저장', () => saveRoom(room, {
+      name: name.value.trim(), themeId: theme.value, maxPeople: max.value ? Number(max.value) : null,
+    })));
+    if (!room.isDefault) actions.append(button('없애기', () => deleteRoom(room)));
+
+    const cellOf = el => { const td = document.createElement('td'); td.append(el); return td; };
+    const tr = document.createElement('tr');
+    tr.append(where, cellOf(name), cellOf(theme), cellOf(max),
+      cell(room.maxPeople ? `${room.listeners}/${room.maxPeople}명` : `${room.listeners}명`), actions);
+    body.append(tr);
+  }
+  table.append(body);
+  $('room-admin').replaceChildren(table);
+}
+
+$('room-reload').addEventListener('click', loadRooms);
+
 function start() {
   clearInterval(timer);
   load();
+  loadRooms();
   timer = setInterval(load, 5000);
 }
 
@@ -130,6 +227,8 @@ $('logout').addEventListener('click', () => {
   $('rooms').replaceChildren();
   $('feedback').replaceChildren();
   $('feedback-total').textContent = '';
+  $('room-admin').replaceChildren();
+  $('room-total').textContent = '';
   $('status').textContent = '키를 지웠어요.';
 });
 

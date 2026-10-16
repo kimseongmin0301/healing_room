@@ -53,6 +53,12 @@ public abstract class RoomException extends ApiException {
         }
     }
 
+    public static class DefaultRoomTheme extends RoomException {
+        public DefaultRoomTheme() {
+            super(HttpStatus.FORBIDDEN, "기본 방의 테마는 바꿀 수 없어요. 주소와 테마 소개 페이지가 이어져 있어요.");
+        }
+    }
+
     public static class NotFound extends RoomException {
         public NotFound() {
             super(HttpStatus.NOT_FOUND, "닫혔거나 없는 방이에요.");

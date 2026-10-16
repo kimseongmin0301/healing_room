@@ -155,15 +155,15 @@ public class RoomSocketHandler extends TextWebSocketHandler {
         return value == null ? null : URLDecoder.decode(value, StandardCharsets.UTF_8);
     }
 
-    /** 방장이 방을 닫으면 방에 있던 모두에게 알리고 끊는다 → 화면은 로비로 가서 고양이 창을 띄운다 */
+    /** 방장·관리자가 방을 닫으면 방에 있던 모두에게 알리고 끊는다 → 화면은 로비로 가서 알림 창을 띄운다 */
     @TransactionalEventListener(fallbackExecution = true)
     public void onRoomClosed(RoomClosedEvent event) {
         for (var connection : sessions.connections(event.roomId())) {
-            sendAndClose(connection.session(), Map.of("type", "room-closed", "byHost", event.byHost()), ROOM_CLOSED);
+            sendAndClose(connection.session(), Map.of("type", "room-closed", "by", event.by()), ROOM_CLOSED);
         }
     }
 
-    /** 방장이 방 설정을 바꾸면 방에 있는 모두에게 알린다 → 화면이 방 정보를 다시 불러 새로 그린다 */
+    /** 방장·관리자가 방 설정을 바꾸면 방에 있는 모두에게 알린다 → 화면이 방 정보를 다시 불러 새로 그린다 */
     @TransactionalEventListener(fallbackExecution = true)
     public void onRoomUpdated(RoomUpdatedEvent event) {
         broadcaster.send(event.roomId(), viewerId -> Map.of("type", "room-updated"));

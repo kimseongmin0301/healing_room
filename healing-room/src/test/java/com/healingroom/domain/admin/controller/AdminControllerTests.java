@@ -46,6 +46,40 @@ class AdminControllerTests {
     @MockitoBean
     com.healingroom.domain.presence.service.KickService kickService;
 
+    @MockitoBean
+    com.healingroom.domain.room.service.RoomService roomService;
+
+    @Test
+    void adminChangesRoomSettings() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/admin/rooms/ab3k9xqz/settings")
+                        .header("X-Admin-Token", "secret").contentType("application/json")
+                        .content("{\"name\":\"새 이름\",\"themeId\":\"sea\",\"maxPeople\":4}"))
+                .andExpect(status().isOk());
+        org.mockito.Mockito.verify(roomService).changeSettingsByAdmin("ab3k9xqz", "새 이름", "sea", 4);
+    }
+
+    @Test
+    void adminDeletesRoom() throws Exception {
+        mvc.perform(delete("/api/admin/rooms/ab3k9xqz").header("X-Admin-Token", "secret"))
+                .andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(roomService).closeByAdmin("ab3k9xqz");
+    }
+
+    @Test
+    void defaultRoomCannotBeDeleted() throws Exception {
+        willThrow(new com.healingroom.domain.room.exception.RoomException.DefaultRoomLocked())
+                .given(roomService).closeByAdmin("sea");
+        mvc.perform(delete("/api/admin/rooms/sea").header("X-Admin-Token", "secret"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void roomAdminNeedsToken() throws Exception {
+        willThrow(new AdminException.Unauthorized()).given(adminService).authorize(null);
+        mvc.perform(delete("/api/admin/rooms/ab3k9xqz")).andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verify(roomService, org.mockito.Mockito.never()).closeByAdmin(org.mockito.ArgumentMatchers.any());
+    }
+
     @Test
     void adminKicks() throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/admin/kick")

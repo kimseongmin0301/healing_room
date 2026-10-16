@@ -19,6 +19,11 @@
     .admin h2 { font-size: 17px; margin: 0; }
     .admin h2 small { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 6px; }
     .admin td.text { white-space: pre-wrap; word-break: break-word; }
+    .admin .room-table input, .admin .room-table select { min-width: 0; width: 100%; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,.06); border: 1px solid var(--line); color: var(--text); font: inherit; }
+    .admin .room-table select option { color: #111; }
+    .admin .room-table .actions { white-space: nowrap; }
+    .admin .room-table .actions .btn + .btn { margin-left: 6px; }
+    .admin .scroll { overflow-x: auto; }
   </style>
 </head>
 <body>
@@ -37,6 +42,13 @@
       <span class="msg">지난 신청곡·투표·인기곡 통계·채팅·추천 캐시를 지우고, 사람이 있는 방은 기본 음악부터 다시 틀어요.</span>
     </div>
     <div id="rooms"></div>
+
+    <section>
+      <h2>방 관리 <small id="room-total"></small> <button id="room-reload" class="btn" type="button" style="margin-left:10px">새로고침</button></h2>
+      <p class="msg">열려 있는 모든 방이에요(빈 방 포함). 이름·테마·최대 인원을 바꾸면 방에 있는 사람들 화면이 바로 바뀌고, 없애면 모두 처음 화면으로 나가요.
+        기본 방은 이름·최대 인원만 바꿀 수 있어요(테마·없애기는 주소와 테마 소개 페이지가 이어져 있어 막음).</p>
+      <div id="room-admin" class="scroll"></div>
+    </section>
 
     <section>
       <h2>받은 의견 <small id="feedback-total"></small></h2>

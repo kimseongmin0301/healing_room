@@ -128,21 +128,50 @@ public class RoomService {
     /** 방장이 방 설정(이름·테마·최대 인원)을 바꾼다. 기본 방은 바꿀 수 없다. 바뀌면 방 사람들 화면을 새로 그린다 */
     @Transactional
     public RoomResponse changeSettingsByHost(String roomId, String visitorId, String name, String themeId, Integer maxPeople) {
-        Room room = hostRoom(roomId, visitorId);
+        return applySettings(hostRoom(roomId, visitorId), name, themeId, maxPeople);
+    }
+
+    /**
+     * 관리자가 방 설정을 바꾼다. 사람이 만든 방은 모두 바꿀 수 있고,
+     * 기본 방은 이름·최대 인원만 (테마는 주소 /{id}·테마 소개 페이지와 이어져 있어 고정)
+     */
+    @Transactional
+    public RoomResponse changeSettingsByAdmin(String roomId, String name, String themeId, Integer maxPeople) {
+        Room room = openRoom(roomId);
+        if (room.isDefault() && !room.getThemeId().equals(themeId)) {
+            throw new RoomException.DefaultRoomTheme();
+        }
+        return applySettings(room, name, themeId, maxPeople);
+    }
+
+    private RoomResponse applySettings(Room room, String name, String themeId, Integer maxPeople) {
         String trimmed = validName(name);
         ThemeResponse theme = validTheme(themeId);
         validMaxPeople(maxPeople);
         room.changeSettings(trimmed, theme.id(), maxPeople);
-        events.publishEvent(new RoomUpdatedEvent(roomId));
-        return RoomResponse.of(room, theme, sessions.listenerCount(roomId));
+        events.publishEvent(new RoomUpdatedEvent(room.getId()));
+        return RoomResponse.of(room, theme, sessions.listenerCount(room.getId()));
     }
 
     /** 방장이 방을 닫는다. 기본 방은 닫을 수 없다. 방에 있던 사람들은 로비로 간다 */
     @Transactional
     public void closeByHost(String roomId, String visitorId) {
-        Room room = hostRoom(roomId, visitorId);
+        close(hostRoom(roomId, visitorId), RoomClosedEvent.HOST);
+    }
+
+    /** 관리자가 방을 없앤다(닫기). 기본 방은 테마마다 하나씩 늘 있어야 해서 없앨 수 없다 */
+    @Transactional
+    public void closeByAdmin(String roomId) {
+        Room room = openRoom(roomId);
+        if (room.isDefault()) {
+            throw new RoomException.DefaultRoomLocked();
+        }
+        close(room, RoomClosedEvent.ADMIN);
+    }
+
+    private void close(Room room, String by) {
         room.close(OffsetDateTime.now());
-        events.publishEvent(new RoomClosedEvent(roomId, true)); // 커밋된 뒤 채팅 정리 + 방 사람들에게 알림
+        events.publishEvent(new RoomClosedEvent(room.getId(), by)); // 커밋된 뒤 채팅 정리 + 방 사람들에게 알림
     }
 
     /** 최대 인원 (제한 없으면 비어 있다) */
@@ -150,8 +179,12 @@ public class RoomService {
         return rooms.findByIdAndClosedAtIsNull(roomId).map(Room::getMaxPeople);
     }
 
+    private Room openRoom(String roomId) {
+        return rooms.findByIdAndClosedAtIsNull(roomId).orElseThrow(RoomException.NotFound::new);
+    }
+
     private Room hostRoom(String roomId, String visitorId) {
-        Room room = rooms.findByIdAndClosedAtIsNull(roomId).orElseThrow(RoomException.NotFound::new);
+        Room room = openRoom(roomId);
         if (room.isDefault()) {
             throw new RoomException.DefaultRoomLocked();
         }

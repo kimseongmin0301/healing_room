@@ -272,6 +272,9 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | GET | `/api/visitor` | 방문자 id 맞추기 (쿠키 → 헤더 → 새로 만들기 순) `{ id }` + 쿠키 `hr_vid` |
 | POST | `/api/rooms/{roomId}/kick` | **방장** 내보내기 `{ "key" }` (접속자 목록의 가린 키) → 204. 방장 아님 403, 없는 사람 404, 자기 자신 400 |
 | POST | `/api/admin/kick?roomId=&key=` | **관리자** 내보내기 (방장 포함 누구나) |
+| GET | `/api/admin/rooms` | **관리자** 열려 있는 모든 방(빈 방·숨은 기본 방 포함) + 테마·인원·최대 인원 |
+| PUT | `/api/admin/rooms/{id}/settings` | **관리자** 방 설정 바꾸기 `{ name, themeId, maxPeople }` → `room-updated`. 기본 방은 이름·최대 인원만(테마를 바꾸면 403) |
+| DELETE | `/api/admin/rooms/{id}` | **관리자** 방 없애기(닫기) → 방 사람 모두에게 `room-closed`(`by:"admin"`) 후 4002, 채팅 삭제. 기본 방 403 |
 | POST | `/api/feedback` | 로비 의견 보내기 `{ "message" }` (1~1000자) → 201. 한 브라우저 10분에 3번·사이트 전체 1시간에 60번 넘으면 429 |
 | GET · DELETE | `/api/admin/feedback`, `/api/admin/feedback/{id}` | **관리자** 받은 의견 최근 200개 / 지우기 |
 | POST | `/api/admin/login`, `/api/admin/logout` | 관리자 로그인 `{ username, password }` → 쿠키 `HR_ADMIN`(HttpOnly·Secure·SameSite=Strict, 8시간). 한 IP 5번 틀리면 15분 429 |
@@ -330,6 +333,8 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 화면은 `room-updated` 를 받으면 방 정보를 다시 불러, 테마가 바뀌었으면 방에 다시 들어가고(20초 안이라 방장 자리 유지) 아니면 이름만 바꿉니다(`app.js` `refreshRoom`).
 - **최대 인원**: 연결할 때 이미 들어와 있지 않은 사람이고 인원이 차 있으면 `room-full` 후 4003 → 화면은 로비로 가서 "방이 꽉 찼어요". 줄여도 이미 있는 사람은 그대로입니다. 로비 카드는 `3/6명`, 가득 차면 "가득 찼어요".
 - 방 만들기·방 설정은 같은 창(`#create-dialog`, `lobby.js` `openRoomForm`)을 씁니다.
+- **관리자**도 `/admin` 의 "방 관리" 표에서 모든 방의 이름·테마·최대 인원을 바꾸고(`changeSettingsByAdmin`) 방을 없앨 수 있습니다(`closeByAdmin`). 기본 방은 주소 `/{id}`·테마 소개 페이지와 이어져 있어 테마 변경·없애기를 막고 이름·최대 인원만 바꿉니다.
+- `RoomClosedEvent.by` = `host`·`admin`·`idle`. 화면은 `room-closed` 의 `by` 를 보고 "방장이/관리자가 이 방을 닫았어요"라고 알립니다.
 
 ### 내보내기 (KickService)
 - 방장은 자기 방에서(자기 자신 제외), 관리자는 어느 방에서나 내보냅니다. 사람은 **가린 키**(`RoomSessionRegistry.keyOf`: 서버를 켤 때 만든 무작위 값 + 방 + 방문자 id 의 SHA-256 앞 16자)로 가리키고, 방문자 id 는 밖에 내보내지 않습니다.

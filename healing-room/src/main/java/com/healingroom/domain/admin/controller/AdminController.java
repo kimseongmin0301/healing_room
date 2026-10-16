@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,7 +27,10 @@ import com.healingroom.domain.admin.service.AdminService;
 import com.healingroom.domain.feedback.dto.FeedbackResponse;
 import com.healingroom.domain.feedback.service.FeedbackService;
 import com.healingroom.domain.presence.service.KickService;
+import com.healingroom.domain.room.dto.RoomResponse;
+import com.healingroom.domain.room.dto.RoomSettingsRequest;
 import com.healingroom.domain.room.service.RoomResetService;
+import com.healingroom.domain.room.service.RoomService;
 import com.healingroom.global.util.ClientRequest;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -45,14 +49,16 @@ public class AdminController {
     private final RoomResetService resetService;
     private final FeedbackService feedbackService;
     private final KickService kickService;
+    private final RoomService roomService;
 
     public AdminController(AdminService adminService, AdminLoginService loginService, RoomResetService resetService,
-                           FeedbackService feedbackService, KickService kickService) {
+                           FeedbackService feedbackService, KickService kickService, RoomService roomService) {
         this.adminService = adminService;
         this.loginService = loginService;
         this.resetService = resetService;
         this.feedbackService = feedbackService;
         this.kickService = kickService;
+        this.roomService = roomService;
     }
 
     // ---------------------------------------------------------------- 로그인
@@ -120,6 +126,33 @@ public class AdminController {
                      @RequestParam String roomId, @RequestParam String key) {
         authorize(session, token);
         kickService.kickByAdmin(roomId, key);
+    }
+
+    /** 열려 있는 모든 방 (빈 방·로비에 안 보이는 기본 방 포함) + 테마·인원·최대 인원 */
+    @GetMapping("/rooms")
+    public List<RoomResponse> rooms(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                                    @RequestHeader(value = TOKEN, required = false) String token) {
+        authorize(session, token);
+        return roomService.findOpen();
+    }
+
+    /** 방 설정 바꾸기 (이름·테마·최대 인원). 기본 방은 테마만 고정. 방 사람들 화면이 바로 바뀐다 */
+    @PutMapping("/rooms/{id}/settings")
+    public RoomResponse changeRoom(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                                   @RequestHeader(value = TOKEN, required = false) String token,
+                                   @PathVariable String id, @RequestBody RoomSettingsRequest body) {
+        authorize(session, token);
+        return roomService.changeSettingsByAdmin(id, body.name(), body.themeId(), body.maxPeople());
+    }
+
+    /** 방 없애기(닫기). 방에 있던 사람은 로비로 가고 채팅도 지워진다. 기본 방은 없앨 수 없다 */
+    @DeleteMapping("/rooms/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteRoom(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                           @RequestHeader(value = TOKEN, required = false) String token,
+                           @PathVariable String id) {
+        authorize(session, token);
+        roomService.closeByAdmin(id);
     }
 
     /** 모든 방의 접속자 (닉네임, 전체 IP, 접속 시각) */

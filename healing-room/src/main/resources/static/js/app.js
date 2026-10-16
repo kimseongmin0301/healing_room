@@ -99,13 +99,13 @@ async function enterRoom(id) {
     onPresence: people => renderPeople(people, room.id),
     // 내보내지면 로비로 가서 슬픈 고양이 창을 띄운다 (다시 연결하지 않는다)
     onKicked: info => { showKicked(info); go('/', { replace: true }); },
-    // 방장이 방을 닫았거나 방이 꽉 찼으면 로비로 가서 알린다
+    // 방장·관리자가 방을 닫았거나 방이 꽉 찼으면 로비로 가서 알린다
     onRoomGone: info => {
       if (info.type === 'room-full') showNotice('방이 꽉 찼어요', `이 방은 최대 ${info.max}명까지 들어갈 수 있어요. 자리가 나면 다시 와 주세요.`);
-      else showNotice('방이 닫혔어요', '방장이 이 방을 닫았어요. 다른 방에서 쉬어 가세요.');
+      else showNotice('방이 닫혔어요', `${info.by === 'admin' ? '관리자가' : '방장이'} 이 방을 닫았어요. 다른 방에서 쉬어 가세요.`);
       go('/', { replace: true });
     },
-    // 방장이 방 설정을 바꾸면 새로 불러온다
+    // 방장·관리자가 방 설정을 바꾸면 새로 불러온다
     onRoomUpdated: () => refreshRoom(room.id),
     onState: state => {
       applyState(state);
