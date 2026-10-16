@@ -69,7 +69,7 @@ body:not(.in-room) canvas { display: none; }
 .dialog { width: min(560px, 100%); padding: 22px; box-sizing: border-box; background: #17151b; }
 /* 서버비 후원: 위쪽 가운데에 작고 흐릿하게, 올리면 또렷하게 */
 .support-chip {
-  position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 6;
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 0; /* 다른 화면 요소에 늘 가려지도록 가장 뒤 (배경 캔버스 바로 위) */
   padding: 5px 12px; border-radius: 999px; font-size: 12px; cursor: pointer; opacity: .6;
   color: var(--text); background: rgba(0, 0, 0, .35); border: 1px solid var(--line); backdrop-filter: blur(6px);
   transition: opacity .2s;
