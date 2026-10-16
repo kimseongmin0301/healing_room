@@ -58,6 +58,21 @@ body:not(.in-room) canvas { display: none; }
   background: rgba(0, 0, 0, .6); padding: 16px;
 }
 .dialog { width: min(560px, 100%); padding: 22px; box-sizing: border-box; background: #17151b; }
+/* 서버비 후원: 위쪽 가운데에 작고 흐릿하게, 올리면 또렷하게 */
+.support-chip {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 6;
+  padding: 5px 12px; border-radius: 999px; font-size: 12px; cursor: pointer; opacity: .6;
+  color: var(--text); background: rgba(0, 0, 0, .35); border: 1px solid var(--line); backdrop-filter: blur(6px);
+  transition: opacity .2s;
+}
+.support-chip:hover, .support-chip:focus-visible { opacity: 1; }
+.dialog.support { width: min(340px, 100%); text-align: center; }
+.dialog.support img { display: block; margin: 14px auto; padding: 10px; background: #fff; border-radius: 12px; }
+.dialog.support .dialog-actions { justify-content: center; }
+.dialog.support a.btn { text-decoration: none; }
+@media (max-width: 700px) {
+  .support-chip span { display: none; } /* 좁은 화면에서는 ☕ 만 */
+}
 .dialog h2 { margin: 0 0 16px; font-size: 20px; }
 .field { display: block; margin-bottom: 14px; font-size: 13px; color: var(--muted); }
 .field > span { display: block; margin-bottom: 6px; }

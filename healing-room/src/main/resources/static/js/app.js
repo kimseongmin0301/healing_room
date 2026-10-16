@@ -9,6 +9,7 @@ import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAu
 import { enterMixer, leaveMixer, setAmbientEnabled } from './audio/mixer.js';
 import { initChat, enterChat, leaveChat, receiveChat, clearChat, getNickname } from './chat.js';
 import { renderPeople, resetPeople } from './people.js';
+import { initSupport } from './support.js';
 
 const $ = id => document.getElementById(id);
 const scene = new Scene($('scene'));
@@ -203,6 +204,7 @@ addEventListener('hashchange', route);
 
 initMusic();
 initChat();
+initSupport();
 renderSoundButtons();
 route();
 

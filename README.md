@@ -426,3 +426,4 @@ export function create(scene) {
 <p align="center">
   🔥 오늘도 수고했어요. 잠깐 쉬어 가세요 → <a href="https://healing.kimseongmin.co.kr"><b>healing.kimseongmin.co.kr</b></a>
 </p>
+<p align="center"><sub>☕ 마음에 들었다면 <a href="https://qr.kakaopay.com/2810060110000090517748503e805972">커피 한 잔</a>으로 서버비를 응원해 주세요</sub></p>

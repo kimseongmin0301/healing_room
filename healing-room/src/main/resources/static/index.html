@@ -9,6 +9,21 @@
 <body>
   <canvas id="scene"></canvas>
 
+  <!-- 서버비 후원: 로비·방 어디서나 위쪽 가운데에 작게. 누르면 카카오페이 QR -->
+  <button id="support-open" class="support-chip" type="button" title="서버비 후원하기">☕ <span>서버비 후원</span></button>
+  <div id="support-dialog" class="dialog-backdrop" hidden>
+    <div class="dialog panel support" role="dialog" aria-labelledby="support-title">
+      <h2 id="support-title">☕ 커피 한 잔 후원</h2>
+      <p class="hint-text">힐링룸은 무료예요. 서버비와 개발을 응원하고 싶다면 커피 한 잔(2,000원)으로 마음을 보태 주세요.</p>
+      <img src="/images/support-qr.png" alt="카카오페이 송금 QR 코드" width="200" height="200">
+      <p class="hint-text">휴대폰 카메라로 QR을 찍거나, 휴대폰에서는 아래 버튼을 눌러요</p>
+      <div class="dialog-actions">
+        <a class="btn primary" href="https://qr.kakaopay.com/2810060110000090517748503e805972" target="_blank" rel="noopener">카카오페이로 열기</a>
+        <button id="support-close" class="btn" type="button">닫기</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 로비: 방 목록 -->
   <section id="lobby" class="lobby" hidden>
     <header class="lobby-head">
