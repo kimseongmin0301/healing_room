@@ -13,7 +13,7 @@
 
 **힐링룸(Healing Room)**: 불멍, 바다멍 같은 테마를 골라 방을 만들고, 실사 배경, 움직이는 효과, 환경음, **함께 듣는 YouTube 음악**으로 쉬는 웹 서비스입니다.
 
-- **방문자 로그인은 없습니다(만들지 않음).** 브라우저마다 UUID(방문자 id)를 만들어 localStorage에 두고 씁니다. 로그인은 **관리자 화면에만** 있습니다(로그인 + 관리자 키 2단계).
+- **방문자 로그인은 없습니다(만들지 않음).** 브라우저마다 UUID(방문자 id)를 만들어 localStorage 와 쿠키(`hr_vid`, HttpOnly)에 함께 둡니다. 시작할 때 `GET /api/visitor` 로 맞추고, 쿠키가 있으면 쿠키 id 가 이깁니다(저장소만 지우거나 바꿔서 내보내기 금지를 피하지 못하게). IP 로는 구분하지 않습니다(PC방·회사처럼 IP 를 같이 쓰는 곳). 로그인은 **관리자 화면에만** 있습니다(로그인 + 관리자 키 2단계).
 - **테마(theme)**는 배경, 효과, 환경음, 기본 음악의 묶음입니다. **방(room)**은 누구나 이름과 테마를 골라 만들 수 있고, 아무도 없는 채로 **30분**이 지나면 닫힙니다. **기본 방**은 테마마다 하나씩 있고 닫히지 않습니다. 테마 10개와 기본 방 id: cabin, sea, forest, forest-rain→`rain`, rain-cafe→`cafe`, snow-cabin→`snow`, sunset-beach→`sunset`, space-station→`space`, space-nebula→`galaxy`, lounge-club→`club` (방 id 는 12자 제한, 주소 `/{id}` 예: `/cafe`). 로비에는 불멍·바다멍(`room.featured`)과 사용자 방, 사람이 있는 기본 방만 보입니다(`RoomService.findLobby`).
 - **방장** = 지금 방에 있는 사람 중 가장 먼저 들어온 사람(보통 방을 만든 사람). 방장이 나가면 그다음에 들어온 사람이 방장이 됩니다. 새로고침처럼 20초 안에 돌아오면 자리를 지켜 줍니다.
 - 같은 방에 있는 사람은 **같은 곡을 같은 위치로** 듣습니다(라디오처럼 동기화). 영상은 직접 조작할 수 없고, **방장만** 모두의 재생을 멈추고/이어 틀고/위치를 옮길 수 있습니다.
@@ -197,6 +197,7 @@ cd healing-room
 | `V8__default_rooms_for_all_themes.sql` | 새 테마 8개의 기본 방 (id: forest, rain, cafe, snow, sunset, space, galaxy, club) | ✅ |
 | `V9__feedback.sql` | 로비 의견 보내기 `feedback` 테이블 (익명, IP·연락처 없음) | ✅ |
 | `V10__room_featured.sql` | `room.featured` (로비에 늘 보이기: cabin, sea) | ✅ |
+| `V11__room_max_people.sql` | `room.max_people` (최대 인원 2~100, NULL 이면 제한 없음) | ✅ |
 
 > V1~V4 파일 안의 `room` 은 지금의 `theme` 입니다(V5 에서 이름이 바뀜).
 
@@ -250,7 +251,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 |---|---|---|
 | GET | `/api/themes` | 테마 목록 (방 만들기에서 고름) |
 | GET | `/api/rooms` | **로비에 보일** 방 목록 (`featured` 기본 방·사용자 방·사람 있는 기본 방, 기본 방 먼저) + 테마 + 현재 인원(`listeners`) |
-| POST | `/api/rooms` | 방 만들기 `{ "name", "themeId" }` → 201. 이름 1~30자, 한 사람이 동시에 3개까지 |
+| POST | `/api/rooms` | 방 만들기 `{ "name", "themeId", "maxPeople"? }` → 201. 이름 1~30자, 최대 인원 2~50(없으면 제한 없음), 한 사람이 동시에 3개까지 |
 | GET | `/api/rooms/{id}` | 방 정보(테마 포함) + 환경음 목록(`ambients`). 닫힌 방은 404 |
 | GET | `/api/rooms/{roomId}/queue` | 음악 상태 (재생 중 곡, 대기열, 인원, 필요한 표 수, `hostIsMe`) |
 | GET | `/api/rooms/{roomId}/queue/history` | 지난 신청곡 최근 30곡 (played/skipped/removed) |
@@ -266,6 +267,9 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | POST | `/api/rooms/{roomId}/chat` | 채팅 보내기 `{ "nickname", "text" }` → 201. 10초에 6개 넘으면 429, Redis 장애 시 503 |
 | POST | `/api/rooms/{id}/reset` | **기본 방의 방장** 기록 초기화 (지난 신청곡·투표·통계·채팅) → 204, 아니면 403 |
 | POST | `/api/admin/reset?roomId=` | **관리자** 기록 초기화. roomId 가 없으면 모든 방 + YouTube 검색 캐시 |
+| PUT | `/api/rooms/{id}/settings` | **사람이 만든 방의 방장** 설정 바꾸기 `{ name, themeId, maxPeople }` → 방 사람 모두에게 `room-updated`. 기본 방 403 |
+| POST | `/api/rooms/{id}/close` | **사람이 만든 방의 방장** 방 닫기 → 방 사람 모두에게 `room-closed` 후 4002. 기본 방 403 |
+| GET | `/api/visitor` | 방문자 id 맞추기 (쿠키 → 헤더 → 새로 만들기 순) `{ id }` + 쿠키 `hr_vid` |
 | POST | `/api/rooms/{roomId}/kick` | **방장** 내보내기 `{ "key" }` (접속자 목록의 가린 키) → 204. 방장 아님 403, 없는 사람 404, 자기 자신 400 |
 | POST | `/api/admin/kick?roomId=&key=` | **관리자** 내보내기 (방장 포함 누구나) |
 | POST | `/api/feedback` | 로비 의견 보내기 `{ "message" }` (1~1000자) → 201. 한 브라우저 10분에 3번·사이트 전체 1시간에 60번 넘으면 429 |
@@ -320,6 +324,12 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 비밀번호는 원문을 두지 않고 `ADMIN_PASSWORD_HASH`(`pbkdf2_sha256$반복$소금$해시`, `scripts/admin_password.py`)만. 아이디가 틀려도 해시 계산을 똑같이 해서 걸린 시간으로 아이디를 알 수 없게 합니다.
 - 한 IP(`ClientRequest.ip`) 5번 틀리면 15분 429. 로그인 표·잠금은 서버 메모리라 재시작하면 다시 로그인합니다.
 - `ADMIN_USERNAME`·`ADMIN_PASSWORD_HASH` 가 비면 `/admin` 과 관리자 API 전체가 404, `ADMIN_TOKEN` 이 비면 관리자 API 가 404.
+
+### 방장의 방 관리 (RoomService)
+- 사람이 만든 방의 방장만: **설정 바꾸기**(이름·테마·최대 인원, `changeSettingsByHost` → `RoomUpdatedEvent` → `room-updated`), **방 닫기**(`closeByHost` → `RoomClosedEvent(byHost)` → 남은 사람에게 `room-closed` 후 4002, 채팅 삭제). 기본 방은 `DefaultRoomLocked`(403).
+- 화면은 `room-updated` 를 받으면 방 정보를 다시 불러, 테마가 바뀌었으면 방에 다시 들어가고(20초 안이라 방장 자리 유지) 아니면 이름만 바꿉니다(`app.js` `refreshRoom`).
+- **최대 인원**: 연결할 때 이미 들어와 있지 않은 사람이고 인원이 차 있으면 `room-full` 후 4003 → 화면은 로비로 가서 "방이 꽉 찼어요". 줄여도 이미 있는 사람은 그대로입니다. 로비 카드는 `3/6명`, 가득 차면 "가득 찼어요".
+- 방 만들기·방 설정은 같은 창(`#create-dialog`, `lobby.js` `openRoomForm`)을 씁니다.
 
 ### 내보내기 (KickService)
 - 방장은 자기 방에서(자기 자신 제외), 관리자는 어느 방에서나 내보냅니다. 사람은 **가린 키**(`RoomSessionRegistry.keyOf`: 서버를 켤 때 만든 무작위 값 + 방 + 방문자 id 의 SHA-256 앞 16자)로 가리키고, 방문자 id 는 밖에 내보내지 않습니다.
@@ -424,6 +434,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - [x] 검색엔진·AI 노출 (소개 페이지 14개, JSON-LD, sitemap, llms.txt, 링크 미리보기), 마스코트
 - [x] 깔끔한 주소(SiteController), 404·5xx 안내 화면
 - [x] 의견 보내기(V9), 관리자 로그인 + 관리자 키, 서버비 후원 버튼
-- [x] 방장·관리자 내보내기 (10분 재입장 금지, 슬픈 고양이 창)
+- [x] 방장·관리자 내보내기 (10분 재입장 금지, 슬픈 고양이 창), 방문자 id 쿠키 함께 저장
+- [x] 방장의 방 설정 바꾸기(이름·테마·최대 인원)·방 닫기, 방 만들 때 최대 인원(V11)
 - [ ] 테마별 배경 영상 (선택)
 - 방문자 로그인은 **만들지 않습니다** (익명 서비스). 로그인은 관리자 화면에만 있습니다.

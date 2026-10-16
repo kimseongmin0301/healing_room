@@ -35,6 +35,30 @@ public abstract class RoomException extends ApiException {
         }
     }
 
+    public static class InvalidMaxPeople extends RoomException {
+        public InvalidMaxPeople(int min, int max) {
+            super(HttpStatus.BAD_REQUEST, "최대 인원은 " + min + "~" + max + "명으로 정해 주세요.");
+        }
+    }
+
+    public static class HostOnly extends RoomException {
+        public HostOnly() {
+            super(HttpStatus.FORBIDDEN, "방장만 할 수 있어요.");
+        }
+    }
+
+    public static class DefaultRoomLocked extends RoomException {
+        public DefaultRoomLocked() {
+            super(HttpStatus.FORBIDDEN, "기본 방은 설정을 바꾸거나 닫을 수 없어요.");
+        }
+    }
+
+    public static class NotFound extends RoomException {
+        public NotFound() {
+            super(HttpStatus.NOT_FOUND, "닫혔거나 없는 방이에요.");
+        }
+    }
+
     public static class InvalidVisitor extends RoomException {
         public InvalidVisitor() {
             super(HttpStatus.BAD_REQUEST, "방문자 정보를 확인할 수 없어요. 새로고침해 주세요.");

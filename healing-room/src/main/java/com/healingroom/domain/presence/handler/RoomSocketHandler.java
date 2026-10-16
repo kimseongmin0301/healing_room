@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -23,7 +25,10 @@ import com.healingroom.domain.presence.service.RoomSessionRegistry;
 import com.healingroom.domain.queue.dto.PlayerState;
 import com.healingroom.domain.queue.event.QueueChangedEvent;
 import com.healingroom.domain.queue.service.QueueService;
+import com.healingroom.domain.room.event.RoomClosedEvent;
+import com.healingroom.domain.room.event.RoomUpdatedEvent;
 import com.healingroom.domain.room.service.RoomService;
+import com.healingroom.domain.visitor.VisitorCookie;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -33,7 +38,8 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>방에 들어오면 연결하고, 연결돼 있는 동안 "방에 있는 사람"으로 센다.
  * 서버 → 브라우저: 음악 상태({@link PlayerState}, type=state), 채팅(type=chat), 접속자 목록({@link PresencePush}, type=presence),
- * 내보내짐(type=kicked, 그 뒤 4001 로 끊김 → 화면은 다시 연결하지 않는다).
+ * 내보내짐(type=kicked, 4001), 방이 닫힘(type=room-closed, 4002), 방이 꽉 참(type=room-full, 4003), 방 설정 바뀜(type=room-updated).
+ * 4001~4003 으로 끊기면 화면은 다시 연결하지 않는다. 쿠키(hr_vid)에 방문자 id 가 있으면 주소의 visitorId 보다 쿠키를 믿는다.
  * 브라우저 → 서버: 연결 유지용 "ping", 닉네임 변경 {"type":"nickname","nickname":"..."}. 그 밖의 동작은 REST API 로 받는다.
  */
 @Component
@@ -42,6 +48,9 @@ public class RoomSocketHandler extends TextWebSocketHandler {
     private static final String ROOM = "roomId";
     private static final String VISITOR = "visitorId";
     private static final String NICKNAME = "nickname";
+    /** 방장이 방을 닫아서 / 방이 꽉 차서 끊긴 연결 (화면이 다시 연결하지 않게 구분한다) */
+    static final CloseStatus ROOM_CLOSED = new CloseStatus(4002, "room-closed");
+    static final CloseStatus ROOM_FULL = new CloseStatus(4003, "room-full");
 
     private final RoomSessionRegistry sessions;
     private final RoomBroadcaster broadcaster;
@@ -68,6 +77,11 @@ public class RoomSocketHandler extends TextWebSocketHandler {
         var query = uri == null ? null : UriComponentsBuilder.fromUri(uri).build(true).getQueryParams();
         String visitorId = query == null ? null : decode(query.getFirst(VISITOR));
         String nickname = query == null ? null : decode(query.getFirst(NICKNAME));
+        // 쿠키에 방문자 id 가 있으면 그것을 믿는다 (저장소의 id 를 바꿔 내보내기 금지를 피하지 못하게)
+        String cookieId = VisitorCookie.fromCookieHeaders(raw.getHandshakeHeaders().get("Cookie"));
+        if (cookieId != null) {
+            visitorId = cookieId;
+        }
 
         if (!isUuid(visitorId) || !roomService.isOpen(roomId)) {
             raw.close(CloseStatus.POLICY_VIOLATION);
@@ -77,6 +91,12 @@ public class RoomSocketHandler extends TextWebSocketHandler {
         var bannedUntil = sessions.bannedUntil(roomId, visitorId);
         if (bannedUntil.isPresent()) {
             kickService.refuse(raw, bannedUntil.get());
+            return;
+        }
+        // 최대 인원이 찼으면 (이미 들어와 있는 사람의 새 탭은 괜찮다) 알리고 끊는다
+        Integer max = roomService.maxPeople(roomId).orElse(null);
+        if (max != null && !sessions.isPresent(roomId, visitorId) && sessions.listenerCount(roomId) >= max) {
+            sendAndClose(raw, Map.of("type", "room-full", "max", max), ROOM_FULL);
             return;
         }
         // 여러 스레드(스케줄러, 요청 스레드, Redis 구독)에서 동시에 보내도 안전하도록 감싼다
@@ -133,6 +153,34 @@ public class RoomSocketHandler extends TextWebSocketHandler {
 
     private static String decode(String value) {
         return value == null ? null : URLDecoder.decode(value, StandardCharsets.UTF_8);
+    }
+
+    /** 방장이 방을 닫으면 방에 있던 모두에게 알리고 끊는다 → 화면은 로비로 가서 고양이 창을 띄운다 */
+    @TransactionalEventListener(fallbackExecution = true)
+    public void onRoomClosed(RoomClosedEvent event) {
+        for (var connection : sessions.connections(event.roomId())) {
+            sendAndClose(connection.session(), Map.of("type", "room-closed", "byHost", event.byHost()), ROOM_CLOSED);
+        }
+    }
+
+    /** 방장이 방 설정을 바꾸면 방에 있는 모두에게 알린다 → 화면이 방 정보를 다시 불러 새로 그린다 */
+    @TransactionalEventListener(fallbackExecution = true)
+    public void onRoomUpdated(RoomUpdatedEvent event) {
+        broadcaster.send(event.roomId(), viewerId -> Map.of("type", "room-updated"));
+        broadcastPresence(event.roomId());
+    }
+
+    private void sendAndClose(WebSocketSession session, Object payload, CloseStatus status) {
+        try {
+            session.sendMessage(new TextMessage(json.writeValueAsString(payload)));
+        } catch (IOException | IllegalStateException e) {
+            // 이미 끊긴 연결이면 닫기만 한다
+        }
+        try {
+            session.close(status);
+        } catch (IOException e) {
+            // 무시
+        }
     }
 
     /** 방 음악 상태가 바뀌면 방에 있는 모두에게 각자 기준의 상태를 보낸다. */

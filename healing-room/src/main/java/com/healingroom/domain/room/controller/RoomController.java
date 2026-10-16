@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.healingroom.domain.room.dto.CreateRoomRequest;
 import com.healingroom.domain.room.dto.RoomDetailResponse;
 import com.healingroom.domain.room.dto.RoomResponse;
+import com.healingroom.domain.room.dto.RoomSettingsRequest;
 import com.healingroom.domain.room.service.RoomResetService;
 import com.healingroom.domain.room.service.RoomService;
 
@@ -49,11 +51,25 @@ public class RoomController {
         return ResponseEntity.of(roomService.findDetail(id));
     }
 
-    /** 방 만들기 { "name": "방 이름", "themeId": "cabin" } */
+    /** 방 만들기 { "name": "방 이름", "themeId": "cabin", "maxPeople": 6 } (maxPeople 이 없으면 인원 제한 없음) */
     @PostMapping
     public ResponseEntity<RoomResponse> create(@RequestHeader("X-Visitor-Id") String visitorId,
                                                @RequestBody CreateRoomRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(roomService.create(visitorId, request.name(), request.themeId()));
+                .body(roomService.create(visitorId, request.name(), request.themeId(), request.maxPeople()));
+    }
+
+    /** 방장: 방 설정 바꾸기 (이름·테마·최대 인원). 기본 방은 403 */
+    @PutMapping("/{id}/settings")
+    public RoomResponse changeSettings(@PathVariable String id, @RequestHeader("X-Visitor-Id") String visitorId,
+                                       @RequestBody RoomSettingsRequest request) {
+        return roomService.changeSettingsByHost(id, visitorId, request.name(), request.themeId(), request.maxPeople());
+    }
+
+    /** 방장: 방 닫기. 방에 있던 사람들은 로비로 간다. 기본 방은 403 */
+    @PostMapping("/{id}/close")
+    public ResponseEntity<Void> close(@PathVariable String id, @RequestHeader("X-Visitor-Id") String visitorId) {
+        roomService.closeByHost(id, visitorId);
+        return ResponseEntity.noContent().build();
     }
 }

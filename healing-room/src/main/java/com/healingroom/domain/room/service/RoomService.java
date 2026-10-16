@@ -22,6 +22,7 @@ import com.healingroom.domain.room.dto.RoomDetailResponse;
 import com.healingroom.domain.room.dto.RoomResponse;
 import com.healingroom.domain.room.entity.Room;
 import com.healingroom.domain.room.event.RoomClosedEvent;
+import com.healingroom.domain.room.event.RoomUpdatedEvent;
 import com.healingroom.domain.room.exception.RoomException;
 import com.healingroom.domain.room.repository.RoomRepository;
 import com.healingroom.domain.theme.dto.ThemeResponse;
@@ -36,6 +37,8 @@ import com.healingroom.domain.theme.service.ThemeService;
 public class RoomService {
 
     static final int NAME_MAX_LENGTH = 30;
+    static final int MIN_PEOPLE = 2;   // 최대 인원으로 고를 수 있는 범위
+    static final int MAX_PEOPLE = 50;
     private static final String ID_CHARS = "abcdefghijkmnpqrstuvwxyz23456789"; // 헷갈리는 l, o, 0, 1 제외
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -102,23 +105,78 @@ public class RoomService {
         return rooms.findById(roomId).map(Room::getThemeId);
     }
 
-    /** 방 만들기. 만든 사람이 들어오면 가장 먼저 들어온 사람이므로 방장이 된다 */
+    /** 방 만들기. 만든 사람이 들어오면 가장 먼저 들어온 사람이므로 방장이 된다. maxPeople 이 null 이면 인원 제한 없음 */
     @Transactional
-    public RoomResponse create(String visitorId, String name, String themeId) {
+    public RoomResponse create(String visitorId, String name, String themeId, Integer maxPeople) {
         if (!isUuid(visitorId)) {
             throw new RoomException.InvalidVisitor();
         }
+        String trimmed = validName(name);
+        ThemeResponse theme = validTheme(themeId);
+        validMaxPeople(maxPeople);
+        if (rooms.countByCreatedByAndClosedAtIsNull(visitorId) >= maxOpenPerVisitor) {
+            throw new RoomException.TooManyRooms(maxOpenPerVisitor);
+        }
+        Room room = rooms.save(new Room(newId(), theme.id(), trimmed, visitorId, maxPeople, OffsetDateTime.now()));
+        return RoomResponse.of(room, theme, 0);
+    }
+
+    public RoomResponse create(String visitorId, String name, String themeId) {
+        return create(visitorId, name, themeId, null);
+    }
+
+    /** 방장이 방 설정(이름·테마·최대 인원)을 바꾼다. 기본 방은 바꿀 수 없다. 바뀌면 방 사람들 화면을 새로 그린다 */
+    @Transactional
+    public RoomResponse changeSettingsByHost(String roomId, String visitorId, String name, String themeId, Integer maxPeople) {
+        Room room = hostRoom(roomId, visitorId);
+        String trimmed = validName(name);
+        ThemeResponse theme = validTheme(themeId);
+        validMaxPeople(maxPeople);
+        room.changeSettings(trimmed, theme.id(), maxPeople);
+        events.publishEvent(new RoomUpdatedEvent(roomId));
+        return RoomResponse.of(room, theme, sessions.listenerCount(roomId));
+    }
+
+    /** 방장이 방을 닫는다. 기본 방은 닫을 수 없다. 방에 있던 사람들은 로비로 간다 */
+    @Transactional
+    public void closeByHost(String roomId, String visitorId) {
+        Room room = hostRoom(roomId, visitorId);
+        room.close(OffsetDateTime.now());
+        events.publishEvent(new RoomClosedEvent(roomId, true)); // 커밋된 뒤 채팅 정리 + 방 사람들에게 알림
+    }
+
+    /** 최대 인원 (제한 없으면 비어 있다) */
+    public Optional<Integer> maxPeople(String roomId) {
+        return rooms.findByIdAndClosedAtIsNull(roomId).map(Room::getMaxPeople);
+    }
+
+    private Room hostRoom(String roomId, String visitorId) {
+        Room room = rooms.findByIdAndClosedAtIsNull(roomId).orElseThrow(RoomException.NotFound::new);
+        if (room.isDefault()) {
+            throw new RoomException.DefaultRoomLocked();
+        }
+        if (visitorId == null || !sessions.isHost(roomId, visitorId)) {
+            throw new RoomException.HostOnly();
+        }
+        return room;
+    }
+
+    private static String validName(String name) {
         String trimmed = name == null ? "" : name.strip();
         if (trimmed.isEmpty() || trimmed.length() > NAME_MAX_LENGTH) {
             throw new RoomException.InvalidName(NAME_MAX_LENGTH);
         }
-        ThemeResponse theme = themeService.find(themeId == null ? "" : themeId)
-                .orElseThrow(RoomException.ThemeNotFound::new);
-        if (rooms.countByCreatedByAndClosedAtIsNull(visitorId) >= maxOpenPerVisitor) {
-            throw new RoomException.TooManyRooms(maxOpenPerVisitor);
+        return trimmed;
+    }
+
+    private ThemeResponse validTheme(String themeId) {
+        return themeService.find(themeId == null ? "" : themeId).orElseThrow(RoomException.ThemeNotFound::new);
+    }
+
+    private static void validMaxPeople(Integer maxPeople) {
+        if (maxPeople != null && (maxPeople < MIN_PEOPLE || maxPeople > MAX_PEOPLE)) {
+            throw new RoomException.InvalidMaxPeople(MIN_PEOPLE, MAX_PEOPLE);
         }
-        Room room = rooms.save(new Room(newId(), theme.id(), trimmed, visitorId, OffsetDateTime.now()));
-        return RoomResponse.of(room, theme, 0);
     }
 
     /** 누가 들어오거나 나갔을 때: 빈 방이 된 시각을 기록하거나 지운다 */

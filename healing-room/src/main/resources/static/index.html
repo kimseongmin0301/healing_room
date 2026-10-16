@@ -102,6 +102,36 @@
     </div>
   </div>
 
+  <!-- 방 만들기 / 방 설정(방장) 창. 로비와 방 안에서 함께 쓴다 (lobby.js 의 openRoomForm) -->
+  <div id="create-dialog" class="dialog-backdrop" hidden>
+    <form id="create-form" class="dialog panel" novalidate>
+      <h2 id="create-title">방 만들기</h2>
+      <label class="field">
+        <span>방 이름</span>
+        <input id="create-name" maxlength="30" placeholder="새벽 작업방" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>최대 인원</span>
+        <select id="create-max">
+          <option value="">제한 없음</option>
+          <option>2</option><option>3</option><option>4</option><option>5</option><option>6</option>
+          <option>8</option><option>10</option><option>15</option><option>20</option><option>30</option><option>50</option>
+        </select>
+      </label>
+      <div class="field">
+        <span>테마</span>
+        <div id="theme-picker" class="theme-picker" role="radiogroup"></div>
+      </div>
+      <p id="create-hint" class="hint-text">방을 만든 사람이 방장이 돼요. 방장이 나가면 그다음에 들어온 사람이 방장이 되고, 아무도 없는 채로 30분이 지나면 방이 닫혀요.</p>
+      <p id="create-msg" class="msg error"></p>
+      <div class="dialog-actions">
+        <button type="button" id="room-close" class="btn danger" hidden>방 닫기</button>
+        <button type="button" id="create-cancel" class="btn">취소</button>
+        <button id="create-submit" class="btn primary">만들기</button>
+      </div>
+    </form>
+  </div>
+
   <!-- 서버비 후원: 로비·방 어디서나 위쪽 가운데에 작게. 누르면 카카오페이 QR -->
   <button id="support-open" class="support-chip" type="button" title="서버비 후원하기">☕ <span>서버비 후원</span></button>
   <div id="support-dialog" class="dialog-backdrop" hidden>
@@ -188,26 +218,7 @@
       </form>
     </section>
 
-    <!-- 방 만들기 -->
-    <div id="create-dialog" class="dialog-backdrop" hidden>
-      <form id="create-form" class="dialog panel" novalidate>
-        <h2>방 만들기</h2>
-        <label class="field">
-          <span>방 이름</span>
-          <input id="create-name" maxlength="30" placeholder="새벽 작업방" autocomplete="off">
-        </label>
-        <div class="field">
-          <span>테마</span>
-          <div id="theme-picker" class="theme-picker" role="radiogroup"></div>
-        </div>
-        <p class="hint-text">방을 만든 사람이 방장이 돼요. 방장이 나가면 그다음에 들어온 사람이 방장이 되고, 아무도 없는 채로 30분이 지나면 방이 닫혀요.</p>
-        <p id="create-msg" class="msg error"></p>
-        <div class="dialog-actions">
-          <button type="button" id="create-cancel" class="btn">취소</button>
-          <button class="btn primary">만들기</button>
-        </div>
-      </form>
-    </div>
+
   </section>
 
   <!-- 방 -->
@@ -223,6 +234,8 @@
       <!-- 기본 방의 방장에게만 보임: 지난 신청곡·채팅·통계 지우기 -->
       <button id="reset-room" class="chip reset-chip" type="button" hidden
               title="이 방의 지난 신청곡, 투표, 채팅을 모두 지우고 기본 음악부터 다시 틀어요">🧹 기록 초기화</button>
+      <!-- 사람이 만든 방의 방장에게만 보임: 이름·테마·최대 인원 바꾸기, 방 닫기 -->
+      <button id="room-settings" class="chip" type="button" hidden>⚙ 방 설정</button>
       <!-- 함께 있는 사람 (닉네임, 가린 IP) -->
       <div id="people" class="panel people" hidden>
         <div class="panel-head">함께 있는 사람 <b id="people-count">0</b>명</div>

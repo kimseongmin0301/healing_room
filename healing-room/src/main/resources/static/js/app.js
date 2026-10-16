@@ -2,9 +2,9 @@
 //  - 로비: 방 카드 목록 (lobby.js)
 //  - 방: 배경 + 효과(scene.js, effects/*), 함께 듣는 음악(music.js), 환경음(audio/mixer.js), 채팅(chat.js), 실시간 연결(room-socket.js)
 import { Scene } from './scene.js';
-import { api, store } from './api.js';
+import { api, store, syncVisitor } from './api.js';
 import { connectRoom } from './room-socket.js';
-import { showLobby, hideLobby } from './lobby.js';
+import { showLobby, hideLobby, openRoomSettings } from './lobby.js';
 import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAudible } from './music.js';
 import { enterMixer, leaveMixer, setAmbientEnabled } from './audio/mixer.js';
 import { initChat, enterChat, leaveChat, receiveChat, clearChat, getNickname } from './chat.js';
@@ -81,14 +81,13 @@ async function enterRoom(id) {
   document.body.classList.add('in-room');
 
   scene.setImage(media);
-  current = { id: room.id, isDefault: room.isDefault, effect: effectModule.create(scene), media };
-  $('title').textContent = room.name;
-  $('subtitle').textContent = room.name === theme.title ? theme.subtitle : `${theme.title} · ${theme.subtitle}`;
+  current = { id: room.id, isDefault: room.isDefault, room, effect: effectModule.create(scene), media };
+  showRoomTitle(room);
   $('hint').textContent = theme.hint;
   $('presence-text').textContent = '연결 중…';
   $('host-chip').hidden = true;
   $('reset-room').hidden = true;
-  document.title = `${room.name} · 힐링룸`;
+  $('room-settings').hidden = true;
 
   enterMixer(room.id, ambients);
   enterMusic(room.id);
@@ -100,11 +99,20 @@ async function enterRoom(id) {
     onPresence: people => renderPeople(people, room.id),
     // 내보내지면 로비로 가서 슬픈 고양이 창을 띄운다 (다시 연결하지 않는다)
     onKicked: info => { showKicked(info); go('/', { replace: true }); },
+    // 방장이 방을 닫았거나 방이 꽉 찼으면 로비로 가서 알린다
+    onRoomGone: info => {
+      if (info.type === 'room-full') showNotice('방이 꽉 찼어요', `이 방은 최대 ${info.max}명까지 들어갈 수 있어요. 자리가 나면 다시 와 주세요.`);
+      else showNotice('방이 닫혔어요', '방장이 이 방을 닫았어요. 다른 방에서 쉬어 가세요.');
+      go('/', { replace: true });
+    },
+    // 방장이 방 설정을 바꾸면 새로 불러온다
+    onRoomUpdated: () => refreshRoom(room.id),
     onState: state => {
       applyState(state);
       setPresence(state.listeners);
       $('host-chip').hidden = !state.hostIsMe;
       $('reset-room').hidden = !(current?.isDefault && state.hostIsMe); // 기본 방의 방장만
+      $('room-settings').hidden = !(current && !current.isDefault && state.hostIsMe); // 사람이 만든 방의 방장만
     },
     // 소켓이 연결된 뒤(=방에 들어온 뒤)에 지난 대화를 불러온다
     onStatus: status => {
@@ -114,15 +122,46 @@ async function enterRoom(id) {
   });
 }
 
+function showRoomTitle(room) {
+  const { theme } = room;
+  $('title').textContent = room.name;
+  $('subtitle').textContent = room.name === theme.title ? theme.subtitle : `${theme.title} · ${theme.subtitle}`;
+  $('hint').textContent = theme.hint;
+  document.title = `${room.name} · 힐링룸`;
+}
+
+/** 방장이 설정을 바꿨을 때: 테마가 바뀌었으면 배경·효과·환경음까지 새로 들어가고, 아니면 이름만 바꾼다 */
+async function refreshRoom(id) {
+  let detail;
+  try {
+    detail = await api('GET', `/api/rooms/${encodeURIComponent(id)}`);
+  } catch {
+    return;
+  }
+  if (current?.id !== id) return;
+  if (detail.room.theme.id !== current.room.theme.id) {
+    enterRoom(id); // 새로고침처럼 잠깐 다시 연결 (20초 안이라 방장 자리는 그대로)
+    return;
+  }
+  current.room = detail.room;
+  showRoomTitle(detail.room);
+}
+
+/** 슬픈 고양이 알림 창 (내보내짐, 방 닫힘, 방 꽉 참) */
+function showNotice(title, text) {
+  $('kicked-title').textContent = title;
+  $('kicked-text').textContent = text;
+  $('kicked-dialog').hidden = false;
+  $('kicked-ok').focus();
+}
+
 /** 내보내졌을 때 창: 누가 내보냈는지, 언제 다시 들어올 수 있는지 */
 function showKicked({ by, until }) {
   const at = new Date(until).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-  $('kicked-title').textContent = by === 'ban' ? '아직 이 방에 들어갈 수 없어요' : '방에서 내보내졌어요';
-  $('kicked-text').textContent = by === 'host' ? `방장이 이 방에서 내보냈어요. ${at} 이후에 다시 들어올 수 있어요.`
-    : by === 'admin' ? `관리자가 이 방에서 내보냈어요. ${at} 이후에 다시 들어올 수 있어요.`
-    : `얼마 전에 이 방에서 내보내졌어요. ${at} 이후에 다시 와 주세요.`;
-  $('kicked-dialog').hidden = false;
-  $('kicked-ok').focus();
+  showNotice(by === 'ban' ? '아직 이 방에 들어갈 수 없어요' : '방에서 내보내졌어요',
+    by === 'host' ? `방장이 이 방에서 내보냈어요. ${at} 이후에 다시 들어올 수 있어요.`
+      : by === 'admin' ? `관리자가 이 방에서 내보냈어요. ${at} 이후에 다시 들어올 수 있어요.`
+        : `얼마 전에 이 방에서 내보내졌어요. ${at} 이후에 다시 와 주세요.`);
 }
 $('kicked-ok').onclick = () => { $('kicked-dialog').hidden = true; };
 $('kicked-dialog').addEventListener('click', e => { if (e.target === $('kicked-dialog')) $('kicked-dialog').hidden = true; });
@@ -267,6 +306,8 @@ initSupport();
 initFeedback();
 setMusic(musicOn);   // 아직 누르지 않았으면 음소거로 시작하고, 누르는 순간 소리를 낸다
 setAmbient(ambientOn);
+$('room-settings').onclick = () => current && openRoomSettings(current.room);
+await syncVisitor(); // 쿠키의 방문자 id 와 맞춘 뒤 들어간다 (내보내기 금지를 저장소만 지워 피하지 못하게)
 route();
 
 (function loop() {

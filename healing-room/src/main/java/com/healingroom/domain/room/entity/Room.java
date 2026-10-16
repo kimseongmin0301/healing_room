@@ -38,6 +38,10 @@ public class Room {
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    /** 최대 인원 (null 이면 제한 없음) */
+    @Column(name = "max_people")
+    private Integer maxPeople;
+
     @Column(name = "emptied_at")
     private OffsetDateTime emptiedAt;
 
@@ -48,11 +52,23 @@ public class Room {
     }
 
     public Room(String id, String themeId, String name, String createdBy, OffsetDateTime now) {
+        this(id, themeId, name, createdBy, null, now);
+    }
+
+    public Room(String id, String themeId, String name, String createdBy, Integer maxPeople, OffsetDateTime now) {
         this.id = id;
         this.themeId = themeId;
         this.name = name;
         this.createdBy = createdBy;
+        this.maxPeople = maxPeople;
         this.emptiedAt = now; // 만든 사람이 들어오기 전까지는 빈 방
+    }
+
+    /** 방장이 바꾸는 방 설정 (이름, 테마, 최대 인원) */
+    public void changeSettings(String name, String themeId, Integer maxPeople) {
+        this.name = name;
+        this.themeId = themeId;
+        this.maxPeople = maxPeople;
     }
 
     /** 사람이 있으면 빈 시각을 지우고, 없으면 처음 빈 시각을 남긴다 */
@@ -80,6 +96,7 @@ public class Room {
     public String getName() { return name; }
     public boolean isDefault() { return isDefault; }
     public boolean isFeatured() { return featured; }
+    public Integer getMaxPeople() { return maxPeople; }
     public String getCreatedBy() { return createdBy; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getEmptiedAt() { return emptiedAt; }

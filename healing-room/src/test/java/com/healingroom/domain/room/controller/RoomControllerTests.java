@@ -91,21 +91,49 @@ class RoomControllerTests {
 
     @Test
     void createRoom() throws Exception {
-        given(roomService.create(VISITOR, "새벽 작업방", "cabin"))
+        given(roomService.create(VISITOR, "새벽 작업방", "cabin", 6))
                 .willReturn(new RoomResponse("ab3k9xqz", "새벽 작업방", false, CABIN_THEME, 0));
 
         mvc.perform(post("/api/rooms")
                         .header("X-Visitor-Id", VISITOR)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"새벽 작업방\",\"themeId\":\"cabin\"}"))
+                        .content("{\"name\":\"새벽 작업방\",\"themeId\":\"cabin\",\"maxPeople\":6}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value("ab3k9xqz"))
                 .andExpect(jsonPath("$.isDefault").value(false));
     }
 
     @Test
+    void hostChangesSettings() throws Exception {
+        given(roomService.changeSettingsByHost("ab3k9xqz", VISITOR, "새 이름", "sea", 4))
+                .willReturn(new RoomResponse("ab3k9xqz", "새 이름", false, CABIN_THEME, 2, 4));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/rooms/ab3k9xqz/settings")
+                        .header("X-Visitor-Id", VISITOR).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"새 이름\",\"themeId\":\"sea\",\"maxPeople\":4}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("새 이름"))
+                .andExpect(jsonPath("$.maxPeople").value(4));
+    }
+
+    @Test
+    void defaultRoomCannotBeClosed() throws Exception {
+        org.mockito.BDDMockito.willThrow(new RoomException.DefaultRoomLocked()).given(roomService).closeByHost("sea", VISITOR);
+
+        mvc.perform(post("/api/rooms/sea/close").header("X-Visitor-Id", VISITOR))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("기본 방은 설정을 바꾸거나 닫을 수 없어요."));
+    }
+
+    @Test
+    void hostClosesRoom() throws Exception {
+        mvc.perform(post("/api/rooms/ab3k9xqz/close").header("X-Visitor-Id", VISITOR)).andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(roomService).closeByHost("ab3k9xqz", VISITOR);
+    }
+
+    @Test
     void createRoomShowsReadableError() throws Exception {
-        given(roomService.create(VISITOR, "", "cabin")).willThrow(new RoomException.InvalidName(30));
+        given(roomService.create(VISITOR, "", "cabin", null)).willThrow(new RoomException.InvalidName(30));
 
         mvc.perform(post("/api/rooms")
                         .header("X-Visitor-Id", VISITOR)

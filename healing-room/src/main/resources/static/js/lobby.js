@@ -18,8 +18,12 @@ function card(room) {
     <span class="badges"></span>
     <span class="info"><span class="theme-name"></span><h2></h2><p></p></span>`;
   const badges = button.querySelector('.badges');
+  const full = room.maxPeople && room.listeners >= room.maxPeople;
   const count = Object.assign(document.createElement('span'), {
-    className: 'tag', textContent: room.listeners > 0 ? `${room.listeners}명이 쉬는 중` : '비어 있어요',
+    className: `tag${full ? ' full' : ''}`,
+    textContent: full ? `가득 찼어요 · ${room.listeners}/${room.maxPeople}명`
+      : room.maxPeople ? `${room.listeners}/${room.maxPeople}명`
+      : room.listeners > 0 ? `${room.listeners}명이 쉬는 중` : '비어 있어요',
   });
   badges.append(count);
   if (room.isDefault) badges.append(Object.assign(document.createElement('span'), { className: 'tag', textContent: '기본 방' }));
@@ -116,14 +120,29 @@ function renderThemes() {
   }));
 }
 
-async function openCreate() {
+// 창 하나를 "방 만들기"와 "방 설정(방장)" 두 가지로 쓴다
+let form = { mode: 'create', room: null };
+
+/**
+ * @param mode 'create' 방 만들기 / 'edit' 방장이 방 설정 바꾸기 (room 필요)
+ */
+async function openRoomForm(mode = 'create', room = null) {
+  form = { mode, room };
+  const editing = mode === 'edit';
+  $('create-title').textContent = editing ? '방 설정' : '방 만들기';
+  $('create-submit').textContent = editing ? '저장' : '만들기';
+  $('create-hint').textContent = editing
+    ? '바꾸면 방에 있는 모두의 화면이 바로 바뀌어요. 최대 인원을 줄여도 이미 있는 사람은 그대로 있어요.'
+    : '방을 만든 사람이 방장이 돼요. 방장이 나가면 그다음에 들어온 사람이 방장이 되고, 아무도 없는 채로 30분이 지나면 방이 닫혀요.';
+  $('room-close').hidden = !editing;
   $('create-msg').textContent = '';
-  $('create-name').value = '';
+  $('create-name').value = editing ? room.name : '';
+  $('create-max').value = editing && room.maxPeople ? String(room.maxPeople) : '';
   $('create-dialog').hidden = false;
   if (!themes.length) {
     try { themes = await api('GET', '/api/themes'); } catch { themes = []; }
   }
-  pickedTheme ??= themes[0]?.id;
+  pickedTheme = editing ? room.theme.id : (pickedTheme ?? themes[0]?.id);
   renderThemes();
   $('create-name').focus();
 }
@@ -137,12 +156,19 @@ async function submitCreate(e) {
   const name = $('create-name').value.trim();
   if (!name) { $('create-msg').textContent = '방 이름을 지어 주세요.'; $('create-name').focus(); return; }
   if (!pickedTheme) { $('create-msg').textContent = '테마를 골라 주세요.'; return; }
+  const maxPeople = $('create-max').value ? Number($('create-max').value) : null;
   const button = e.submitter;
   button.disabled = true;
   try {
-    const room = await api('POST', '/api/rooms', { name, themeId: pickedTheme });
-    closeCreate();
-    enterRoom(room.id);
+    if (form.mode === 'edit') {
+      // 저장하면 서버가 방 사람 모두에게 알려 화면이 새로 그려진다 (app.js 의 room-updated)
+      await api('PUT', `/api/rooms/${encodeURIComponent(form.room.id)}/settings`, { name, themeId: pickedTheme, maxPeople });
+      closeCreate();
+    } else {
+      const room = await api('POST', '/api/rooms', { name, themeId: pickedTheme, maxPeople });
+      closeCreate();
+      enterRoom(room.id);
+    }
   } catch (err) {
     $('create-msg').textContent = err.message;
   } finally {
@@ -150,7 +176,20 @@ async function submitCreate(e) {
   }
 }
 
-$('create-open').onclick = openCreate;
+/** 방장: 방 닫기. 닫으면 방에 있던 모두가 로비로 간다 (app.js 의 room-closed) */
+async function closeRoom() {
+  if (!confirm('이 방을 닫을까요?
+방에 있는 모두가 처음 화면으로 나가고, 채팅도 지워져요. 되돌릴 수 없어요.')) return;
+  try {
+    await api('POST', `/api/rooms/${encodeURIComponent(form.room.id)}/close`);
+    closeCreate();
+  } catch (err) {
+    $('create-msg').textContent = err.message;
+  }
+}
+
+$('create-open').onclick = () => openRoomForm('create');
+$('room-close').onclick = closeRoom;
 $('create-cancel').onclick = closeCreate;
 $('create-form').addEventListener('submit', submitCreate);
 $('create-name').addEventListener('input', () => { $('create-msg').textContent = ''; });
@@ -166,6 +205,11 @@ export function showLobby(onEnter, message = '') {
   refresh();
   clearInterval(timer);
   timer = setInterval(refresh, 10000);
+}
+
+/** 방장: 방 안에서 방 설정 창 열기 */
+export function openRoomSettings(room) {
+  openRoomForm('edit', room);
 }
 
 export function hideLobby() {
