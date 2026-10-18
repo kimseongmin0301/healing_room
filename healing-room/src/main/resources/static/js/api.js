@@ -33,6 +33,7 @@ export let visitorId = loadVisitorId();
 export async function syncVisitor() {
   try {
     const res = await fetch('/api/visitor', { headers: { 'X-Visitor-Id': visitorId } });
+    checkVersion(res);
     const { id } = await res.json();
     if (id && id !== visitorId) {
       visitorId = id;
@@ -43,6 +44,24 @@ export async function syncVisitor() {
   }
 }
 
+// ---------------------------------------------------------------- 새 버전 알아채기
+// 서버는 API 응답마다 버전(X-App-Version, 서버가 켜진 시각)을 붙인다. 처음 본 값과 달라지면 배포된 것이다.
+// 이 화면은 로비·방을 오가도 새로 불러오지 않아서, 그대로 두면 탭을 닫을 때까지 예전 코드가 돈다.
+let appVersion = null;
+let onOutdated = null;
+
+/** 새 버전이 배포된 것을 알게 되면 부를 함수 (app.js 가 정한다. 그 뒤 API 를 부를 때마다 다시 불린다) */
+export function whenOutdated(callback) {
+  onOutdated = callback;
+}
+
+function checkVersion(res) {
+  const version = res.headers.get('X-App-Version');
+  if (!version) return;
+  if (appVersion === null) appVersion = version;
+  else if (version !== appVersion) onOutdated?.();
+}
+
 /** JSON API 호출. 실패하면 서버가 준 message 로 Error 를 던진다. */
 export async function api(method, url, body) {
   const res = await fetch(url, {
@@ -50,6 +69,7 @@ export async function api(method, url, body) {
     headers: { 'X-Visitor-Id': visitorId, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
+  checkVersion(res);
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) throw new Error(data?.message ?? `요청에 실패했어요 (${res.status})`);

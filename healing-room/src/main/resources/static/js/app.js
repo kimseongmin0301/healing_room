@@ -2,7 +2,7 @@
 //  - 로비: 방 카드 목록 (lobby.js)
 //  - 방: 배경 + 효과(scene.js, effects/*), 함께 듣는 음악(music.js), 환경음(audio/mixer.js), 채팅(chat.js), 실시간 연결(room-socket.js)
 import { Scene } from './scene.js';
-import { api, store, syncVisitor } from './api.js';
+import { api, store, syncVisitor, whenOutdated } from './api.js';
 import { connectRoom } from './room-socket.js';
 import { showLobby, hideLobby, openRoomSettings } from './lobby.js';
 import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAudible } from './music.js';
@@ -307,6 +307,13 @@ initFeedback();
 setMusic(musicOn);   // 아직 누르지 않았으면 음소거로 시작하고, 누르는 순간 소리를 낸다
 setAmbient(ambientOn);
 $('room-settings').onclick = () => current && openRoomSettings(current.room);
+// 새 버전이 배포됐으면 로비에서 조용히 새로고침한다. 방에서 음악을 듣는 중에는 끊지 않고, 로비로 나오면 바꾼다
+// (로비는 10초마다 방 목록을 부르므로 그때마다 다시 확인). 열린 창이 있거나 쓰던 의견이 있으면 기다린다
+whenOutdated(() => {
+  const inLobby = !current && location.pathname === '/';
+  const busy = document.querySelector('.dialog-backdrop:not([hidden])') || $('feedback-text')?.value.trim();
+  if (inLobby && !busy) location.reload();
+});
 await syncVisitor(); // 쿠키의 방문자 id 와 맞춘 뒤 들어간다 (내보내기 금지를 저장소만 지워 피하지 못하게)
 route();
 

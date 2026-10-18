@@ -42,6 +42,12 @@ class VisitorControllerTests {
     }
 
     @Test
+    void apiResponsesCarryAppVersion() throws Exception {
+        // 화면은 이 값이 바뀌면(배포) 로비에서 새로고침한다
+        mvc.perform(get("/api/visitor")).andExpect(header().exists(com.healingroom.global.config.AppVersionFilter.HEADER));
+    }
+
+    @Test
     void newIdWhenNothing() throws Exception {
         mvc.perform(get("/api/visitor")).andExpect(jsonPath("$.id").isString());
     }

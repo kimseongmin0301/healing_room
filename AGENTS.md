@@ -122,7 +122,8 @@
       │     └─ service/             RoomSessionRegistry (방별 접속자·들어온 순서·방장·가린 키·내보낸 사람, 메모리), RoomBroadcaster (방 사람들에게 각자 기준으로 전송),
       │                             KickService (방장·관리자 내보내기, 10분 재입장 금지, kicked 알림 후 4001 로 끊기)
       └─ global/
-         ├─ config/                 WebSocketConfig, RedisConfig (채팅 pub/sub 구독), TextFileCharsetFilter (.txt 를 UTF-8 로)
+         ├─ config/                 WebSocketConfig, RedisConfig (채팅 pub/sub 구독), TextFileCharsetFilter (.txt 를 UTF-8 로),
+         │                          AppVersionFilter (API 응답에 X-App-Version = 서버가 켜진 시각)
          ├─ util/                   ClientRequest (nginx 뒤에서 실제 IP·https 여부, 루프백에서 온 헤더만 믿음)
          └─ exception/              ApiException(공통 부모), GlobalExceptionHandler (→ { "message": ... })
 
@@ -372,6 +373,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 원본 PNG 는 저장소에 넣지 말고 webp 로 바꿔 넣습니다 (방 만들기 화면에서 모든 테마 배경을 미리보기로 불러옴).
 - 환경음을 추가하려면 `audio/sounds.js`의 `SOUNDS`에 키를 추가하고, 같은 키를 `theme_ambient.sound`에 씁니다.
 - 브라우저 저장소(localStorage)는 `api.js`의 `store`를 쓰세요(실패해도 무시).
+- **오래 열어 둔 탭**: 로비·방을 오가도 페이지를 새로 불러오지 않으므로, 탭을 닫지 않으면 배포 전 코드가 계속 돕니다(예: 내보내기 기능 전 코드가 내보내진 뒤 1초마다 재접속하고, 금지가 풀리자 다시 들어가 "아무도 없는데 누가 있는" 방이 됨). 그래서 `api.js` 가 응답의 `X-App-Version` 이 처음 값과 달라지면 `whenOutdated` 를 부르고, `app.js` 는 **로비에 있고 열린 창·쓰던 의견이 없을 때만** 새로고침합니다(방에서 듣는 중에는 끊지 않음).
 - **방 만들기 창 등 `.dialog`** 는 화면보다 길면 창 안에서 스크롤하고 `.dialog-actions`(취소·만들기)는 아래에 붙어 있습니다(휴대폰). 휴대폰에서 테마 선택은 3칸·짧은 이름.
 - 로비 방 카드는 한 쪽(page)에 6·4·2개(`lobby.js` `pageSize`, CSS `.room-page` 열 수와 맞춤), 좌우 버튼으로 넘깁니다.
 - **소개 페이지(SEO/AEO/GEO)**: `resources/pages/themes/{기본 방 id}.html`(테마 10개), `pages/themes/index.html`, `pages/about.html`, `pages/privacy.html`, `static/images/og/{id}.jpg`, `static/sitemap.xml` 은 **`scripts/seo_pages.py` 로 만든 결과물**입니다. 직접 고치지 말고 스크립트의 `THEMES` 등을 고친 뒤 `python scripts/seo_pages.py` 로 다시 만들어 함께 커밋하세요(Pillow·맑은 고딕 필요). 주소는 `.html` 없이 `SiteController` 가 보여줍니다(`/about`, `/themes`, `/themes/cafe`). 테마를 추가하면 스크립트와 `llms.txt` 에도 넣습니다.
