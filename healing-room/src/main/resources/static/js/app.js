@@ -6,7 +6,7 @@ import { api, store, syncVisitor, whenOutdated } from './api.js';
 import { connectRoom } from './room-socket.js';
 import { showLobby, hideLobby, openRoomSettings } from './lobby.js';
 import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAudible, isMusicStuck } from './music.js';
-import { enterMixer, leaveMixer, setAmbientEnabled } from './audio/mixer.js';
+import { enterMixer, leaveMixer, setAmbientEnabled, onMixerInput } from './audio/mixer.js';
 import { initChat, enterChat, leaveChat, receiveChat, clearChat, getNickname } from './chat.js';
 import { renderPeople, resetPeople } from './people.js';
 import { initSupport } from './support.js';
@@ -20,6 +20,9 @@ let socket = null;
 // 소리 켜짐/꺼짐은 브라우저에 기억하고, 처음이면 둘 다 켠다
 let musicOn = store.get('musicOn', true);      // 음악(YouTube) 소리
 let ambientOn = store.get('ambientOn', true);  // 환경음
+// 음악이 나오는 중에 사용자가 직접 환경음을 켰으면 음악과 함께 듣고 싶은 것이므로, 다음 곡에서도 자동으로 끄지 않는다
+let ambientWithMusic = store.get('ambientWithMusic', false);
+let musicAudible = false;
 // 브라우저는 사용자가 한 번 누르기 전에는 소리를 막는다. 새로고침·주소로 들어오면 음소거로 틀어 두었다가
 // 페이지 어디든 처음 누를 때(unlockSound) 켜 둔 소리를 낸다.
 // 다만 브라우저가 클릭 없이도 소리를 허락하면(크롬: 이 사이트에서 소리를 자주 들었을 때, 엣지·파이어폭스: 자동 재생 허용) 바로 소리를 낸다
@@ -280,9 +283,12 @@ if (soundGuessed) {
   }, 4000);
 }
 
-// 음악이 들리기 시작하면 환경음을 잠시 끄고, 음악이 멈추면 (자동으로 껐던 경우에만) 다시 켠다
+// 음악이 들리기 시작하면 환경음을 잠시 끄고, 음악이 멈추면 (자동으로 껐던 경우에만) 다시 켠다.
+// 음악과 함께 듣겠다고 직접 켠 경우(ambientWithMusic)는 끄지 않는다
+// (예전에는 직접 켜도 다음 곡이 시작되면 또 꺼져서 "환경음 조절이 안 된다"는 의견이 왔다)
 onMusicAudible(audible => {
-  if (audible && ambientOn) {
+  musicAudible = audible;
+  if (audible && ambientOn && !ambientWithMusic) {
     ambientOn = false;
     ambientPaused = true;
     setAmbientEnabled(false);
@@ -317,12 +323,24 @@ $('music-sound').onclick = () => {
   setMusic(!musicOn);
   store.set('musicOn', musicOn);
 };
+/** 사용자가 직접 환경음을 켜고 끈다. 음악이 나오는 중에 켜면 "음악과 함께 듣기"로 기억한다 */
+function chooseAmbient(on) {
+  setAmbient(on);
+  store.set('ambientOn', on);
+  if (!on || musicAudible) {
+    ambientWithMusic = on;
+    store.set('ambientWithMusic', on);
+  }
+}
 $('ambient-sound').onclick = () => {
   if (consumeUnlockClick($('ambient-sound'))) return;
   // 음악 때문에 쉬는 중에 누르면 "다시 켜기"로 본다 (직접 켠 것은 음악이 나와도 유지)
-  setAmbient(!ambientOn);
-  store.set('ambientOn', ambientOn);
+  chooseAmbient(!ambientOn);
 };
+// 꺼져 있거나 음악 때문에 쉬는 중에 슬라이더를 움직이면 들어 보려는 것이므로 켠다
+onMixerInput(() => {
+  if (!ambientOn) chooseAmbient(true);
+});
 $('fx').onclick = e => {
   scene.fxOn = !scene.fxOn;
   e.target.textContent = scene.fxOn ? '효과 끄기' : '효과 켜기';

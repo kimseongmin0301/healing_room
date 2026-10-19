@@ -8,6 +8,12 @@ let master = null;
 let roomId = null;
 let channels = [];   // { sound, gain, voice }
 let enabled = false;
+let onTouch = null;   // 슬라이더를 움직였을 때 (app.js: 꺼져 있거나 쉬는 중이면 켠다)
+
+/** 사용자가 슬라이더를 움직이면 부를 함수 */
+export function onMixerInput(fn) {
+  onTouch = fn;
+}
 
 const key = sound => `volume:${roomId}:${sound}`;
 // 사람 귀는 소리 크기를 로그처럼 느끼므로 제곱해서 슬라이더 체감을 고르게 한다
@@ -56,6 +62,7 @@ export function enterMixer(id, ambients) {
       out.textContent = ch.value;
       store.set(key(sound), ch.value);
       if (ch.gain) ch.gain.gain.setTargetAtTime(level(ch.value), ctx.currentTime, 0.05);
+      onTouch?.();
     });
   }
   if (enabled) connectChannels();
