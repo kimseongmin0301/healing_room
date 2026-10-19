@@ -5,7 +5,7 @@ import { Scene } from './scene.js';
 import { api, store, syncVisitor, whenOutdated } from './api.js';
 import { connectRoom } from './room-socket.js';
 import { showLobby, hideLobby, openRoomSettings } from './lobby.js';
-import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAudible } from './music.js';
+import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAudible, isMusicStuck } from './music.js';
 import { enterMixer, leaveMixer, setAmbientEnabled } from './audio/mixer.js';
 import { initChat, enterChat, leaveChat, receiveChat, clearChat, getNickname } from './chat.js';
 import { renderPeople, resetPeople } from './people.js';
@@ -21,8 +21,23 @@ let socket = null;
 let musicOn = store.get('musicOn', true);      // 음악(YouTube) 소리
 let ambientOn = store.get('ambientOn', true);  // 환경음
 // 브라우저는 사용자가 한 번 누르기 전에는 소리를 막는다. 새로고침·주소로 들어오면 음소거로 틀어 두었다가
-// 페이지 어디든 처음 누를 때(unlockSound) 켜 둔 소리를 낸다
-let soundUnlocked = navigator.userActivation?.hasBeenActive ?? false;
+// 페이지 어디든 처음 누를 때(unlockSound) 켜 둔 소리를 낸다.
+// 다만 브라우저가 클릭 없이도 소리를 허락하면(크롬: 이 사이트에서 소리를 자주 들었을 때, 엣지·파이어폭스: 자동 재생 허용) 바로 소리를 낸다
+function autoplayAllowed() {
+  try {
+    if (navigator.getAutoplayPolicy) return navigator.getAutoplayPolicy('mediaelement') === 'allowed'; // 파이어폭스
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx(); // 허락되지 않으면 'suspended' 로 만들어진다
+    const allowed = ctx.state === 'running';
+    ctx.close();
+    return allowed;
+  } catch {
+    return false;
+  }
+}
+const activated = () => navigator.userActivation?.hasBeenActive ?? false;
+let soundUnlocked = activated() || autoplayAllowed();
+const soundGuessed = soundUnlocked && !activated(); // 누르지 않았는데 허락된다고 보고 소리를 낸 경우
 let unlockTarget = null; // 소리를 처음 풀어 준 누름이 어느 요소였는지
 let ambientPaused = false; // 음악 때문에 환경음을 자동으로 끈 상태 (음악이 멈추면 다시 켠다)
 let lobbyMessage = '';   // 로비로 돌아갈 때 보여줄 안내 (닫힌 방 등)
@@ -248,6 +263,21 @@ function unlockSound(e) {
 }
 for (const type of ['pointerdown', 'keydown', 'touchstart']) {
   addEventListener(type, unlockSound, { capture: true, passive: true });
+}
+
+// 클릭 없이 소리를 내 봤는데 브라우저가 막았으면(8초 넘게 재생이 안 되거나 YouTube 가 음소거해 둠)
+// 음소거로 돌려 일단 영상이 흐르게 하고, 처음 누를 때 소리를 낸다 ("🔈 소리 켜기" 버튼이 다시 보임)
+if (soundGuessed) {
+  let strikes = 0;
+  const check = setInterval(() => {
+    if (activated()) { clearInterval(check); return; } // 이미 눌렀으면 브라우저가 허락한다
+    strikes = isMusicStuck() ? strikes + 1 : 0;
+    if (strikes < 2) return;
+    clearInterval(check);
+    soundUnlocked = false;
+    setMusic(musicOn);
+    setAmbient(ambientOn);
+  }, 4000);
 }
 
 // 음악이 들리기 시작하면 환경음을 잠시 끄고, 음악이 멈추면 (자동으로 껐던 경우에만) 다시 켠다

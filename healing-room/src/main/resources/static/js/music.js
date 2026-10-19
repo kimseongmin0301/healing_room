@@ -613,6 +613,16 @@ export function applyState(next) {
   sync();
 }
 
+/**
+ * 지금 곡이 있어 들려야 하는데 들리지 않는지 (재생이 안 되거나, 소리를 켰는데 YouTube 가 음소거해 둠).
+ * 클릭 없이 소리를 내 봤다가 브라우저가 막았는지 알아보는 데 쓴다 (app.js)
+ */
+export function isMusicStuck() {
+  const np = state?.nowPlaying;
+  if (!np || np.pausedAt || muted || !player?.getPlayerState) return false;
+  return player.getPlayerState() !== YT.PlayerState.PLAYING || player.isMuted();
+}
+
 export function setMusicMuted(value) {
   muted = value;
   if (muted) setAudible(false, { immediate: true });
