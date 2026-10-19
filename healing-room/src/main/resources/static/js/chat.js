@@ -1,5 +1,6 @@
 // 방 채팅: 지난 대화 불러오기, 보내기, 실시간으로 받은 메시지 표시, 닉네임(브라우저에 저장)
 import { api, store } from './api.js';
+import { track } from './analytics.js';
 
 const $ = id => document.getElementById(id);
 const list = $('chat-list');
@@ -81,6 +82,7 @@ async function send(e) {
   button.disabled = true;
   try {
     const sent = await api('POST', `/api/rooms/${roomId}/chat`, { nickname, text });
+    track('chat_send');
     input.value = '';
     message('');
     append(sent, { scroll: true });

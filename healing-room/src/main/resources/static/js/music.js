@@ -1,5 +1,6 @@
 // 함께 듣는 음악: 서버가 보내준 상태에 맞춰 YouTube 플레이어를 동기화하고, 대기열·투표 화면을 그린다.
 import { api, store } from './api.js';
+import { track } from './analytics.js';
 
 const $ = id => document.getElementById(id);
 const DRIFT_LIMIT = 3; // 다른 사람과 이만큼(초) 어긋나면 위치를 다시 맞춘다
@@ -518,6 +519,7 @@ async function request(url, button) {
   try {
     const added = await api('POST', `/api/rooms/${roomId}/queue`, { url });
     recordRequest(added);
+    track('song_request');
     message(`신청했어요: ${added.title}`);
     return true;
   } catch (err) {

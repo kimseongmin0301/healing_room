@@ -25,6 +25,7 @@ RESOURCES = os.path.join(os.path.dirname(__file__), '..', 'healing-room', 'src',
 ROOT = os.path.join(RESOURCES, 'static')   # 정적 파일 (이미지, sitemap)
 PAGES = os.path.join(RESOURCES, 'pages')   # 소개 페이지 (SiteController 가 .html 없는 주소로 보여줌)
 SITE = 'https://healing.kimseongmin.co.kr'
+GA_ID = 'G-DYY0NFW8RR'  # Google Analytics (GA4). 바꾸면 static/index.html 의 태그도 같이 바꾼다
 AUTHOR_NAME = '김성민'
 AUTHOR_URL = 'https://github.com/kimseongmin0301'
 # 만든 사람: 모든 소개 페이지의 구조화 데이터에 넣는다 (검색엔진·AI 가 누가 운영하는지 알 수 있게)
@@ -172,6 +173,8 @@ def page(title, description, path, image, body, ld, extra_head=''):
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
   <link rel="stylesheet" href="/css/pages.css">
+  <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
+  <script>window.dataLayer = window.dataLayer || []; function gtag(){{dataLayer.push(arguments);}} gtag('js', new Date()); gtag('config', '{GA_ID}');</script>
   <script type="application/ld+json">
 {json.dumps(ld, ensure_ascii=False, indent=2)}
   </script>{extra_head}
@@ -364,7 +367,7 @@ def about():
     write_page('about.html', page(title, description, path, '/images/og-cat.jpg', body, ld))
 
 
-PRIVACY_SINCE = '2026-10-16'  # 내용을 바꾸면 날짜를 새로 적고, 아래 "바뀐 내용" 에 한 줄 남긴다
+PRIVACY_SINCE = '2026-10-19'  # 내용을 바꾸면 날짜를 새로 적고, 아래 "바뀐 내용" 에 한 줄 남긴다
 
 
 def privacy():
@@ -379,9 +382,12 @@ def privacy():
         ('보낸 의견과 방문자 번호', '서비스 개선', '서버 DB', '운영자가 지울 때까지'),
         ('접속 IP 주소', '접속자 목록(앞부분만), 장난 대응, 위조 방지', '서버 메모리', '접속해 있는 동안만'),
         ('접속 IP 주소, 접속 시각, 브라우저 정보', '서버 오류·공격 확인', '웹 서버(nginx) 접속 기록', '14일'),
+        ('본 페이지, 머문 시간, 기기·브라우저 종류, 대략의 지역, 들어온 경로, 방 입장·곡 신청 같은 이용 횟수',
+         '방문 통계 (어떤 테마가 인기인지, 무엇을 고칠지)', 'Google Analytics (Google 서버)', '14개월 (Google Analytics 기본 보관 기간)'),
     ]
     local = [('chatNickname', '채팅 닉네임'), ('myRequests', '내가 신청한 곡 기록(최대 100곡, 내 추천에만 사용)'),
-             ('musicOn · ambientOn · musicVolume', '소리 켜기·끄기, 음량'), ('musicView · chatCollapsed', '음악 창 크기, 채팅 창 접기')]
+             ('musicOn · ambientOn · musicVolume', '소리 켜기·끄기, 음량'), ('musicView · chatCollapsed', '음악 창 크기, 채팅 창 접기'),
+             ('ambientWithMusic', '음악과 함께 환경음 듣기')]
     body = f"""  <main class="content">
     <h1>개인정보처리방침</h1>
     <p class="lead">힐링룸은 회원가입과 로그인이 없어요. <b>이름, 이메일, 전화번호, 생년월일 같은 정보는 받지 않아요.</b> 그래도 서비스를 돌리려면 남는 정보가 있어서, 무엇을 어디에 얼마나 두는지 모두 적어 둬요.</p>
@@ -391,7 +397,8 @@ def privacy():
       <thead><tr><th>무엇</th><th>왜</th><th>어디에</th><th>얼마나</th></tr></thead>
       <tbody>{''.join(f'<tr><td>{esc(a)}</td><td>{esc(b)}</td><td>{esc(c)}</td><td>{esc(d)}</td></tr>' for a, b, c, d in rows)}</tbody>
     </table></div>
-    <p>방문자 번호는 브라우저마다 무작위로 만든 값이라 그것만으로는 누구인지 알 수 없어요. 광고나 방문 분석 도구는 쓰지 않아요.</p>
+    <p>방문자 번호는 브라우저마다 무작위로 만든 값이라 그것만으로는 누구인지 알 수 없어요. 광고는 없어요.
+      방문 통계에는 Google Analytics 를 쓰고, 방문자 번호·닉네임·채팅 내용·곡 제목처럼 사람을 알아볼 수 있거나 직접 쓴 내용은 보내지 않아요.</p>
 
     <h2>2. 다른 사람에게 보이는 것</h2>
     <ul>
@@ -404,11 +411,15 @@ def privacy():
     <ul>
       <li><b>hr_vid</b> (쿠키), <b>visitorId</b> (저장소): 방문자 번호</li>
       {''.join(f'<li><b>{esc(k)}</b>: {esc(v)}</li>' for k, v in local)}
+      <li><b>_ga, _ga_*</b> (쿠키): Google Analytics 가 같은 브라우저의 재방문을 세는 무작위 번호 (최대 2년)</li>
     </ul>
 
     <h2>4. 함께 쓰는 외부 서비스</h2>
     <ul>
       <li><b>YouTube (Google)</b>: 음악은 YouTube 플레이어로 재생해요. 재생할 때 Google 이 자체 쿠키 등으로 정보를 모을 수 있고, 이는 <a href="https://policies.google.com/privacy?hl=ko" rel="noopener">Google 개인정보처리방침</a>을 따라요. 노래를 검색하면 검색어만 YouTube 로 보내요(방문자 정보는 보내지 않음).</li>
+      <li><b>Google Analytics (Google)</b>: 방문 통계를 위해 페이지를 볼 때 위 1번 표의 정보가 Google 로 가요.
+        <a href="https://policies.google.com/technologies/partner-sites?hl=ko" rel="noopener">Google 이 이 정보를 쓰는 방법</a>.
+        원하지 않으면 브라우저에서 쿠키를 막거나 <a href="https://tools.google.com/dlpage/gaoptout?hl=ko" rel="noopener">Google Analytics 차단 부가기능</a>을 쓰면 돼요. 막아도 힐링룸은 그대로 쓸 수 있어요.</li>
       <li><b>카카오페이</b>: 서버비 후원 버튼의 QR 이나 링크를 직접 눌렀을 때만 카카오페이로 이동해요.</li>
       <li>그 밖에 다른 회사에 정보를 주거나 팔지 않아요.</li>
     </ul>
@@ -435,7 +446,8 @@ def privacy():
 
     <h2>9. 바뀐 내용</h2>
     <ul>
-      <li>{PRIVACY_SINCE} 처음 만들고 시행</li>
+      <li>{PRIVACY_SINCE} 방문 통계(Google Analytics) 추가</li>
+      <li>2026-10-16 처음 만들고 시행</li>
     </ul>
 
     <p><a class="cta" href="/">힐링룸 들어가기 →</a></p>

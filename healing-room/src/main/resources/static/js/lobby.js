@@ -1,5 +1,6 @@
 // 로비: 열려 있는 방 목록(방마다 지금 있는 사람 수)과 방 만들기
 import { api } from './api.js';
+import { track } from './analytics.js';
 
 const $ = id => document.getElementById(id);
 const grid = $('room-grid');
@@ -166,6 +167,7 @@ async function submitCreate(e) {
       closeCreate();
     } else {
       const room = await api('POST', '/api/rooms', { name, themeId: pickedTheme, maxPeople });
+      track('room_create', { theme: pickedTheme, max_people: maxPeople ?? 0 });
       closeCreate();
       enterRoom(room.id);
     }

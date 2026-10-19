@@ -11,6 +11,7 @@ import { initChat, enterChat, leaveChat, receiveChat, clearChat, getNickname } f
 import { renderPeople, resetPeople } from './people.js';
 import { initSupport } from './support.js';
 import { initFeedback } from './feedback.js';
+import { track } from './analytics.js';
 
 const $ = id => document.getElementById(id);
 const scene = new Scene($('scene'));
@@ -100,6 +101,7 @@ async function enterRoom(id) {
 
   scene.setImage(media);
   current = { id: room.id, isDefault: room.isDefault, room, effect: effectModule.create(scene), media };
+  track('room_enter', { theme: room.theme.id, room_type: room.isDefault ? 'default' : 'user' });
   showRoomTitle(room);
   $('hint').textContent = theme.hint;
   $('presence-text').textContent = '연결 중…';
