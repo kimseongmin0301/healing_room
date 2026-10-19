@@ -52,6 +52,32 @@ class KickServiceTests {
     }
 
     @Test
+    void personRetryingAFewTimesKeepsOriginalBan() throws Exception {
+        // 사람이 모르고 몇 번 다시 눌러도 금지는 늘어나지 않는다
+        long original = System.currentTimeMillis() + 60_000;
+        registry.ban("sea", "PERSON", original);
+        for (int i = 0; i < KickService.RAPID_LIMIT - 1; i++) {
+            service.refuse(session(), "sea", "PERSON");
+        }
+        assertThat(registry.bannedUntil("sea", "PERSON")).contains(original);
+    }
+
+    @Test
+    void oldTabHammeringGetsBanExtended() throws Exception {
+        // 예전 코드 탭은 알림을 몰라 1초마다 두드린다 → 연달아 RAPID_LIMIT 번이면 금지를 지금부터 10분으로 늘린다
+        registry.ban("sea", "OLDTAB", System.currentTimeMillis() + 1000);
+        WebSocketSession last = null;
+        for (int i = 0; i < KickService.RAPID_LIMIT; i++) {
+            last = session();
+            service.refuse(last, "sea", "OLDTAB");
+        }
+        assertThat(registry.bannedUntil("sea", "OLDTAB").orElseThrow())
+                .isGreaterThan(System.currentTimeMillis() + KickService.BAN.toMillis() - 5000);
+        verify(last).sendMessage(argThat(m -> ((TextMessage) m).getPayload().contains("\"by\":\"ban\"")));
+        verify(last).close(KickService.CLOSE);
+    }
+
+    @Test
     void onlyHostCanKickAndNotThemselves() {
         registry.add("sea", "HOST", session());
         registry.add("sea", "GUEST", session());

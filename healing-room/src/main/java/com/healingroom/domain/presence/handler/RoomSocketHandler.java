@@ -87,10 +87,9 @@ public class RoomSocketHandler extends TextWebSocketHandler {
             raw.close(CloseStatus.POLICY_VIOLATION);
             return;
         }
-        // 내보내진 지 10분이 안 됐으면 들어오지 못하게 알리고 끊는다
-        var bannedUntil = sessions.bannedUntil(roomId, visitorId);
-        if (bannedUntil.isPresent()) {
-            kickService.refuse(raw, bannedUntil.get());
+        // 내보내진 지 10분이 안 됐으면 들어오지 못하게 알리고 끊는다 (다시 두드리면 금지가 지금부터 10분으로 늘어남)
+        if (sessions.bannedUntil(roomId, visitorId).isPresent()) {
+            kickService.refuse(raw, roomId, visitorId);
             return;
         }
         // 최대 인원이 찼으면 (이미 들어와 있는 사람의 새 탭은 괜찮다) 알리고 끊는다
