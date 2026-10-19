@@ -63,6 +63,9 @@ public class QueueService {
 
     private static final int MAX_NEW_SEARCHES = 2; // 자동 추천 한 번에 새로 YouTube 를 검색하는 횟수 (할당량 아끼기)
     private static final int MAX_SEEDS = 5;        // 자동 추천의 기준 곡 수
+    // 받아들이는 영상 길이 상한(초) = YouTube 가 올릴 수 있는 최대 길이 12시간.
+    // 예전에는 6시간이라 7~8시간짜리 차트 모음 영상의 길이를 버렸고, 길이를 모르니 새로 들어온 사람은 처음부터 듣고 곡도 끝나지 않았다
+    static final int MAX_DURATION_SECONDS = 12 * 60 * 60;
 
     private final QueueItemRepository items;
     private final QueueVoteRepository votes;
@@ -181,7 +184,7 @@ public class QueueService {
     /** 브라우저 플레이어가 알려준 영상 길이(초). 재생 중인 곡에만 반영한다. */
     public void reportDuration(String roomId, Long itemId, String visitorId, int seconds) {
         requirePresent(roomId, visitorId);
-        if (seconds <= 0 || seconds > 6 * 60 * 60) {
+        if (seconds <= 0 || seconds > MAX_DURATION_SECONDS) {
             return; // 라이브(0)거나 비정상적인 값
         }
         inRoom(roomId, () -> {

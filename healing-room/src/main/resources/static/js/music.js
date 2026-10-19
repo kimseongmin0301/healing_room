@@ -119,9 +119,21 @@ function reportDuration() {
   const np = state?.nowPlaying;
   if (!np || durationSent || np.id !== loadedItemId) return;
   const seconds = Math.round(player.getDuration());
-  if (seconds > 0) {
+  if (seconds > 0 && !player.getVideoData?.().isLive) {
     durationSent = true;
     api('PUT', `/api/rooms/${roomId}/queue/${np.id}/duration`, { seconds }).catch(() => {});
+  }
+}
+
+// 라이브가 아닌, 길이를 아는 영상인지. 서버가 아직 길이를 몰라도(아무도 보고하지 않았거나 늦을 때) 내 플레이어가 알면 위치를 맞춘다.
+// 라이브에 위치를 주면 "녹화를 볼 수 없음" 오류가 나므로 라이브는 맞추지 않는다
+function hasLength(np, p) {
+  if (np.duration) return true;
+  if (np.id !== loadedItemId) return false;
+  try {
+    return p.getDuration() > 0 && !p.getVideoData?.().isLive;
+  } catch {
+    return false;
   }
 }
 
@@ -143,7 +155,7 @@ async function sync() {
     durationSent = false;
     resetCatchUp();
     // 라이브 방송에 시작 위치를 주면 "녹화를 볼 수 없음" 오류가 나므로, 길이를 아는(라이브가 아닌) 영상만 위치를 지정한다.
-    // 길이를 아직 모르면 0초부터 틀고, 다른 사람이 길이를 알려주면 다음 동기화 때 위치를 맞춘다
+    // 서버가 길이를 아직 모르면 0초부터 틀고, 재생이 시작되면 내 플레이어가 안 길이로 다음 동기화(최대 5초 뒤) 때 위치를 맞춘다
     const video = np.duration ? { videoId: np.youtubeId, startSeconds: expectedPosition(np) } : { videoId: np.youtubeId };
     if (np.pausedAt) p.cueVideoById(video); else p.loadVideoById(video); // 방장이 멈춘 곡이면 불러오기만
     if (muted) p.mute(); else p.unMute();
@@ -153,7 +165,7 @@ async function sync() {
   // 방장이 멈춘 상태: 모두 멈추고 위치만 맞춘다
   if (np.pausedAt) {
     if (playerState === YT.PlayerState.PLAYING || playerState === YT.PlayerState.BUFFERING) p.pauseVideo();
-    if (np.duration && Math.abs(p.getCurrentTime() - expectedPosition(np)) > 1.5) p.seekTo(expectedPosition(np), true);
+    if (hasLength(np, p) && Math.abs(p.getCurrentTime() - expectedPosition(np)) > 1.5) p.seekTo(expectedPosition(np), true);
     return;
   }
   // 직접 조작은 막혀 있으니, 멈춰 있으면(자동재생 실패, 방장이 다시 재생 등) 다시 재생한다
@@ -162,7 +174,7 @@ async function sync() {
     return;
   }
   // 라이브(길이 없음)가 아닐 때만 위치를 맞춘다
-  if (np.duration && playerState === YT.PlayerState.PLAYING) catchUp(p, expectedPosition(np));
+  if (playerState === YT.PlayerState.PLAYING && hasLength(np, p)) catchUp(p, expectedPosition(np));
 }
 
 /** 어긋난 만큼 위치를 옮긴다. 너무 자주 옮기지 않는다 (SEEK_* 참고) */
