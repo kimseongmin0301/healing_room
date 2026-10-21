@@ -111,7 +111,8 @@
       │  │  ├─ dto/                 AdminLoginRequest, AdminPresenceResponse
       │  │  └─ exception/           AdminException (설정 없음 404, 키·로그인 틀림 401, 잠금 429)
       │  ├─ moderation/             ← 욕설·음란어 30분 제한
-      │  │  ├─ service/             ProfanityFilter (resources/moderation/badwords.txt·allow.txt), ModerationService (IP·방문자 제한, 관리자 풀기)
+      │  │  ├─ service/             ProfanityFilter (resources/moderation/badwords.txt·allow.txt·mask.txt), ModerationService (IP·방문자 제한, 관리자 풀기)
+      │  │  ├─ repository/ entity/  BanRepository (Redis, 30분 TTL), BanRecord
       │  │  ├─ dto/ exception/      BanResponse, ModerationException (Banned 403)
       │  ├─ visitor/                ← 방문자 번호 (로그인 없이 브라우저 구분)
       │  │                          VisitorController (GET /api/visitor), VisitorCookie (쿠키 hr_vid, WebSocket 연결 때도 읽음)
@@ -225,6 +226,8 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | `healing-room:chat:{roomId}` | List (JSON) | 방의 최근 메시지 100개 | 기본 방: 마지막 메시지 후 24시간 / 사용자 방: 닫힐 때 삭제(놓쳐도 7일 뒤 자동 삭제) |
 | `healing-room:chat-rate:{visitorId}` | String (카운터) | 도배 방지 (10초에 6개) | 10초 |
 | `healing-room:chat` | pub/sub 채널 | 새 메시지를 모든 서버에 알림 | - |
+| `healing-room:ban:{id}` | String (JSON) | 욕설·음란어 이용 제한 기록(`BanRecord`: 방문자·IP·어디서·걸린 말·시각) | 30분 (TTL) |
+| `healing-room:ban-ip:{IP}`, `healing-room:ban-visitor:{visitorId}` | String (제한 id) | IP·방문자 번호로 제한 찾기 | 30분 (TTL) |
 
 ### 채팅 흐름 (ChatService)
 1. `POST /api/rooms/{roomId}/chat` → 방에 접속해 있는지 확인 → 입력 정리(`ChatPolicy`: 제어 문자 제거, 메시지 300자·닉네임 12자) → 도배 확인
@@ -358,7 +361,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - 비교: 소문자·전각→반각, 한글·자모·영문·숫자만(NFKC 는 겹자음 같은 자모를 다른 코드로 바꿔 버려서 쓰지 않음). 띄어쓴 단어마다 보고, **한 글자 단어는 이웃과 붙여서도** 봄(한 글자씩 띄어 쓴 우회). 띄어쓰기를 다 지우면 앞 단어 끝과 뒷 단어 처음이 이어져 오탐이 나서입니다. 숫자를 지운 글자도 봄(숫자 끼워 넣기).
 - **가리기(제한 없음)**: 평범한 말에도 들어 있는 애매한 말(`mask.txt`)은 제한하지 않고 `*` 로 가립니다(`ProfanityFilter.mask`, 채팅 내용·닉네임·방 이름). 원래 글자·띄어쓰기·기호는 두고 그 글자만 바꾸며, 기호는 건너뛰고 띄어쓰기는 넘지 않습니다. 순서: 제한 검사(`check`) → 가리기(`mask`) → 저장.
 - **목록을 고치면 `ProfanityFilterTests`** 에 멀쩡한 문장·욕 문장을 더하고 돌립니다. 오탐 의견이 오면 `allow.txt` 에 더합니다.
-- 관리자 화면 "이용 제한": 걸린 시각·어디서·걸린 말·전체 IP·방문자·풀리는 시각, **제한 풀기**(`GET/DELETE /api/admin/bans`). 제한 목록은 서버 메모리(재시작하면 풀림). IP·쓴 글은 로그에 남기지 않고 걸린 말만 남깁니다.
+- 관리자 화면 "이용 제한": 걸린 시각·어디서·걸린 말·전체 IP·방문자·풀리는 시각, **제한 풀기**(`GET/DELETE /api/admin/bans`). 제한은 **Redis 에 30분 TTL** 로 저장합니다(`BanRepository`, 배포·재시작해도 유지, 시간이 지나면 Redis 가 스스로 지움). Redis 가 안 되면 제한 확인은 건너뛰고(서비스는 계속), 지금 걸린 글은 그대로 거절합니다. IP·쓴 글은 로그에 남기지 않고 걸린 말만 남깁니다.
 
 ### 의견 보내기 (FeedbackService)
 - `POST /api/feedback` 익명. 제어 문자 정리, 1~1000자. 한 브라우저(방문자 id) 10분에 3번, 사이트 전체 1시간에 60번(방문자 id 는 바꿀 수 있어 전체 한도도 둠). IP·연락처 저장 안 함.
@@ -368,7 +371,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - WebSocket 연결 때 `ClientIpHandshakeInterceptor` 가 IP 를 세션에 남깁니다. 요청이 루프백(nginx)에서 왔을 때만 `X-Forwarded-For` 첫 주소를 믿고, 밖에서 직접 온 요청의 헤더는 무시합니다(위조 방지).
 - 닉네임은 연결 주소(`nickname=`)로 받고, 바꾸면 WebSocket 메시지로 받습니다(`ChatPolicy.cleanNickname` 으로 정리).
 - 사람이 들어오고 나가거나 닉네임을 바꾸면 `PresencePush` 를 방 전체에 보냅니다. **방문자 id 와 전체 IP 는 절대 내보내지 않고** IP 는 `IpMask` 로 앞부분만 보냅니다. 전체 IP 는 관리자 API 에서만.
-- IP 는 개인정보이므로 저장(DB·Redis·로그)하지 않고 서버 메모리에만, 접속해 있는 동안만 둡니다.
+- IP 는 개인정보이므로 저장(DB·로그)하지 않고 서버 메모리에만, 접속해 있는 동안만 둡니다. 예외: 욕설·음란어로 제한된 IP 는 Redis 에 30분 TTL 로 둡니다.
 
 ## 9. 프론트엔드 규칙
 

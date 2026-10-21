@@ -2,23 +2,73 @@ package com.healingroom.domain.moderation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.junit.jupiter.api.Test;
 
+import org.springframework.data.redis.RedisConnectionFailureException;
+
+import com.healingroom.domain.moderation.entity.BanRecord;
 import com.healingroom.domain.moderation.exception.ModerationException;
+import com.healingroom.domain.moderation.repository.BanRepository;
 import com.healingroom.domain.presence.service.KickService;
 
 class ModerationServiceTests {
 
+    /** Redis 대신 메모리에 두는 가짜 저장소 (TTL 은 저장한 값만 확인) */
+    static class MemoryBanRepository extends BanRepository {
+        final Map<String, BanRecord> bans = new ConcurrentHashMap<>();
+        Duration lastTtl;
+
+        MemoryBanRepository() {
+            super(null, null, "test:");
+        }
+
+        @Override public void save(BanRecord ban, Duration ttl) { bans.put(ban.id(), ban); lastTtl = ttl; }
+        @Override public List<BanRecord> findFor(String visitorId, String ip) {
+            return bans.values().stream().filter(b -> b.matches(visitorId, ip)).toList();
+        }
+        @Override public Optional<BanRecord> find(String id) { return Optional.ofNullable(bans.get(id)); }
+        @Override public List<BanRecord> findAll() { return List.copyOf(bans.values()); }
+        @Override public void delete(BanRecord ban) { bans.remove(ban.id()); }
+    }
+
+    static final ProfanityFilter FILTER = new ProfanityFilter(List.of("씨발"), List.of("시발점"));
     KickService kickService = mock(KickService.class);
-    ModerationService service = new ModerationService(new ProfanityFilter(List.of("씨발"), List.of("시발점")), kickService);
+    MemoryBanRepository repository = new MemoryBanRepository();
+    ModerationService service = new ModerationService(FILTER, kickService, repository);
+
+    @Test
+    void banIsSavedWithThirtyMinuteTtl() {
+        service.banIfProfane("V1", "1.2.3.4", "chat", "씨발");
+        assertThat(repository.lastTtl).isEqualTo(ModerationService.BAN);
+    }
+
+    @Test
+    void whenRedisIsDownServiceKeepsWorkingAndProfanityIsStillRefused() {
+        BanRepository broken = mock(BanRepository.class);
+        org.mockito.BDDMockito.willThrow(new RedisConnectionFailureException("down")).given(broken).findFor(any(), any());
+        org.mockito.BDDMockito.willThrow(new RedisConnectionFailureException("down")).given(broken).save(any(), any());
+        ModerationService withBrokenRedis = new ModerationService(FILTER, kickService, broken);
+
+        // 확인이 안 돼도 깨끗한 글은 지나가고
+        withBrokenRedis.check("V1", "1.2.3.4", "chat", "안녕하세요");
+        // 지금 걸린 글은 거절하고 방에서도 내보낸다
+        assertThatThrownBy(() -> withBrokenRedis.check("V1", "1.2.3.4", "chat", "씨발"))
+                .isInstanceOf(ModerationException.Banned.class);
+        verify(kickService).removeEverywhere(eq("V1"), eq("1.2.3.4"), anyLong());
+    }
 
     @Test
     void cleanTextPasses() {

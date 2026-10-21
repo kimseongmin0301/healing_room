@@ -3,17 +3,18 @@ package com.healingroom.domain.moderation.service;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 import com.healingroom.domain.moderation.dto.BanResponse;
+import com.healingroom.domain.moderation.entity.BanRecord;
 import com.healingroom.domain.moderation.exception.ModerationException;
+import com.healingroom.domain.moderation.repository.BanRepository;
 import com.healingroom.domain.presence.service.KickService;
 
 /**
@@ -22,7 +23,9 @@ import com.healingroom.domain.presence.service.KickService;
  *
  * <p>IP 와 방문자 번호 둘 다로 막는다(번호만이면 시크릿 창으로, IP 만이면 휴대폰 데이터 전환으로 바로 피한다).
  * PC방·회사처럼 IP 를 같이 쓰는 곳은 옆 사람도 함께 막히므로, 관리자 화면에서 바로 풀 수 있다.
- * 제한 목록은 서버 메모리에만 둔다(재시작하면 풀림). IP·쓴 글은 로그에 남기지 않는다.
+ * 제한 목록은 Redis 에 30분 만료(TTL)로 둔다(BanRepository) — 배포·재시작해도 유지되고, 시간이 지나면 Redis 가 스스로 지운다.
+ * Redis 가 안 되면 확인은 건너뛰어 서비스는 계속 돌고(제한이 잠시 안 걸림), 지금 걸린 글은 그대로 거절한다.
+ * IP·쓴 글은 로그에 남기지 않는다.
  */
 @Service
 public class ModerationService {
@@ -33,22 +36,12 @@ public class ModerationService {
 
     private final ProfanityFilter filter;
     private final KickService kickService;
-    private final Map<String, Ban> bans = new ConcurrentHashMap<>();
+    private final BanRepository bans;
 
-    /**
-     * @param where 어디서 걸렸는지 (chat, nickname, room-name)
-     * @param word  걸린 말 (관리자 화면에서 오탐인지 보려고)
-     */
-    record Ban(String id, String visitorId, String ip, String where, String word, long at, long until) {
-
-        boolean matches(String visitor, String address) {
-            return (visitor != null && visitor.equals(visitorId)) || (address != null && address.equals(ip));
-        }
-    }
-
-    public ModerationService(ProfanityFilter filter, KickService kickService) {
+    public ModerationService(ProfanityFilter filter, KickService kickService, BanRepository bans) {
         this.filter = filter;
         this.kickService = kickService;
+        this.bans = bans;
     }
 
     /**
@@ -86,15 +79,25 @@ public class ModerationService {
     /** 제한 중이면 풀리는 시각(ms) */
     public Optional<Long> bannedUntil(String visitorId, String ip) {
         long now = System.currentTimeMillis();
-        bans.values().removeIf(ban -> ban.until() <= now);
-        return bans.values().stream().filter(ban -> ban.matches(visitorId, ip)).map(Ban::until).max(Long::compare);
+        try {
+            return bans.findFor(visitorId, ip).stream()
+                    .filter(ban -> ban.until() > now && ban.matches(visitorId, ip))
+                    .map(BanRecord::until).max(Long::compare);
+        } catch (DataAccessException e) {
+            log.warn("이용 제한 확인 실패 (Redis): {}", e.getMostSpecificCause().getMessage());
+            return Optional.empty(); // Redis 가 안 돼도 방·음악·채팅은 돌아가게
+        }
     }
 
     private long ban(String visitorId, String ip, String where, String word) {
         long now = System.currentTimeMillis();
         long until = now + BAN.toMillis();
-        Ban ban = new Ban(UUID.randomUUID().toString(), visitorId, ip, where, word, now, until);
-        bans.put(ban.id(), ban);
+        BanRecord ban = new BanRecord(UUID.randomUUID().toString(), visitorId, ip, where, word, now, until);
+        try {
+            bans.save(ban, BAN);
+        } catch (DataAccessException e) {
+            log.warn("이용 제한 저장 실패 (Redis): {}", e.getMostSpecificCause().getMessage());
+        }
         kickService.removeEverywhere(visitorId, ip, until);
         log.info("욕설·음란어로 30분 이용 제한 (where={}, word={})", where, word);
         return until;
@@ -105,9 +108,9 @@ public class ModerationService {
     /** 지금 제한 중인 목록 (최근 것부터) */
     public List<BanResponse> list() {
         long now = System.currentTimeMillis();
-        bans.values().removeIf(ban -> ban.until() <= now);
-        return bans.values().stream()
-                .sorted(Comparator.comparingLong(Ban::at).reversed())
+        return bans.findAll().stream()
+                .filter(ban -> ban.until() > now)
+                .sorted(Comparator.comparingLong(BanRecord::at).reversed())
                 .map(ban -> new BanResponse(ban.id(), ban.where(), ban.word(),
                         ban.visitorId() == null ? null : ban.visitorId().substring(0, Math.min(8, ban.visitorId().length())),
                         ban.ip(), ban.at(), ban.until()))
@@ -116,8 +119,6 @@ public class ModerationService {
 
     /** 제한 풀기 (오탐이거나 IP 를 같이 쓰는 다른 사람이 막혔을 때) */
     public void lift(String id) {
-        if (bans.remove(id) == null) {
-            throw new ModerationException.NotFound();
-        }
+        bans.delete(bans.find(id).orElseThrow(ModerationException.NotFound::new));
     }
 }
