@@ -93,18 +93,47 @@ function renderFeedback(list) {
   $('feedback').replaceChildren(table);
 }
 
+// 이용 제한 (욕설·음란어 30분)
+const WHERE = { chat: '채팅', nickname: '닉네임', 'room-name': '방 이름' };
+
+function renderBans(list) {
+  $('ban-total').textContent = `${list.length}명`;
+  if (!list.length) { $('bans').textContent = '지금 제한된 사람이 없어요.'; return; }
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th>걸린 시각</th><th>어디서</th><th>걸린 말</th><th>IP</th><th>방문자</th><th>풀리는 시각</th><th></th></tr></thead>';
+  const body = document.createElement('tbody');
+  for (const b of list) {
+    const tr = document.createElement('tr');
+    const lift = Object.assign(document.createElement('button'), { className: 'btn', type: 'button', textContent: '제한 풀기' });
+    lift.onclick = async () => {
+      if (!confirm(`이 제한을 풀까요? (${b.ip ?? '-'})`)) return;
+      const res = await fetch(`/api/admin/bans/${encodeURIComponent(b.id)}`, { method: 'DELETE', headers: { 'X-Admin-Token': getToken() } });
+      $('status').textContent = res.ok ? '제한을 풀었어요.' : ((await res.json().catch(() => null))?.message ?? `풀지 못했어요 (${res.status})`);
+      load();
+    };
+    const action = document.createElement('td');
+    action.append(lift);
+    tr.append(cell(timeText(b.at)), cell(WHERE[b.where] ?? b.where), cell(b.word), cell(b.ip ?? '-', 'mono'), cell(b.visitor ?? '-', 'mono'),
+      cell(timeText(b.until)), action);
+    body.append(tr);
+  }
+  table.append(body);
+  $('bans').replaceChildren(table);
+}
+
 async function load() {
   const token = getToken();
   if (!token) return;
   try {
     const headers = { 'X-Admin-Token': token };
-    const [res, feedbackRes] = await Promise.all([
-      fetch('/api/admin/presence', { headers }), fetch('/api/admin/feedback', { headers })]);
+    const [res, feedbackRes, bansRes] = await Promise.all([
+      fetch('/api/admin/presence', { headers }), fetch('/api/admin/feedback', { headers }), fetch('/api/admin/bans', { headers })]);
     const data = await res.json().catch(() => null);
     if (res.status === 401 && data?.message?.includes('로그인')) { location.reload(); return; } // 로그인이 풀리면 로그인 화면으로
     if (!res.ok) throw new Error(data?.message ?? `불러오지 못했어요 (${res.status})`);
     render(data);
     if (feedbackRes.ok) renderFeedback(await feedbackRes.json());
+    if (bansRes.ok) renderBans(await bansRes.json());
   } catch (e) {
     $('status').textContent = e.message;
     $('rooms').replaceChildren();

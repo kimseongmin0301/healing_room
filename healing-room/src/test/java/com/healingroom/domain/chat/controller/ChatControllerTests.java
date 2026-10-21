@@ -32,6 +32,24 @@ class ChatControllerTests {
     @MockitoBean
     ChatService chatService;
 
+    @MockitoBean
+    com.healingroom.domain.moderation.service.ModerationService moderation;
+
+    @Test
+    void profanityIsRefusedWith403AndNotSaved() throws Exception {
+        org.mockito.BDDMockito.willThrow(new com.healingroom.domain.moderation.exception.ModerationException.Banned(System.currentTimeMillis()))
+                .given(moderation).check(org.mockito.ArgumentMatchers.eq(VISITOR), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.eq("chat"), org.mockito.ArgumentMatchers.eq("졸린 고양이"),
+                        org.mockito.ArgumentMatchers.eq("나쁜 말"));
+        mvc.perform(post("/api/rooms/cabin/chat").header("X-Visitor-Id", VISITOR)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nickname\":\"졸린 고양이\",\"text\":\"나쁜 말\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("제한")));
+        org.mockito.Mockito.verify(chatService, org.mockito.Mockito.never())
+                .send(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
     @Test
     void sendReturnsMyMessage() throws Exception {
         given(chatService.send("cabin", VISITOR, "졸린 고양이", "안녕하세요"))

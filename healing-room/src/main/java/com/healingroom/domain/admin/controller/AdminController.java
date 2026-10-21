@@ -26,6 +26,8 @@ import com.healingroom.domain.admin.service.AdminLoginService;
 import com.healingroom.domain.admin.service.AdminService;
 import com.healingroom.domain.feedback.dto.FeedbackResponse;
 import com.healingroom.domain.feedback.service.FeedbackService;
+import com.healingroom.domain.moderation.dto.BanResponse;
+import com.healingroom.domain.moderation.service.ModerationService;
 import com.healingroom.domain.presence.service.KickService;
 import com.healingroom.domain.room.dto.RoomResponse;
 import com.healingroom.domain.room.dto.RoomSettingsRequest;
@@ -50,15 +52,18 @@ public class AdminController {
     private final FeedbackService feedbackService;
     private final KickService kickService;
     private final RoomService roomService;
+    private final ModerationService moderation;
 
     public AdminController(AdminService adminService, AdminLoginService loginService, RoomResetService resetService,
-                           FeedbackService feedbackService, KickService kickService, RoomService roomService) {
+                           FeedbackService feedbackService, KickService kickService, RoomService roomService,
+                           ModerationService moderation) {
         this.adminService = adminService;
         this.loginService = loginService;
         this.resetService = resetService;
         this.feedbackService = feedbackService;
         this.kickService = kickService;
         this.roomService = roomService;
+        this.moderation = moderation;
     }
 
     // ---------------------------------------------------------------- 로그인
@@ -153,6 +158,24 @@ public class AdminController {
                            @PathVariable String id) {
         authorize(session, token);
         roomService.closeByAdmin(id);
+    }
+
+    /** 욕설·음란어로 이용이 제한된 사람 (전체 IP·걸린 말) */
+    @GetMapping("/bans")
+    public List<BanResponse> bans(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                                  @RequestHeader(value = TOKEN, required = false) String token) {
+        authorize(session, token);
+        return moderation.list();
+    }
+
+    /** 제한 풀기 (오탐이거나 같은 IP 를 쓰는 다른 사람이 함께 막혔을 때) */
+    @DeleteMapping("/bans/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void liftBan(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                        @RequestHeader(value = TOKEN, required = false) String token,
+                        @PathVariable String id) {
+        authorize(session, token);
+        moderation.lift(id);
     }
 
     /** 모든 방의 접속자 (닉네임, 전체 IP, 접속 시각) */

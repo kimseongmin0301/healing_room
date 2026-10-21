@@ -49,6 +49,21 @@ class AdminControllerTests {
     @MockitoBean
     com.healingroom.domain.room.service.RoomService roomService;
 
+    @MockitoBean
+    com.healingroom.domain.moderation.service.ModerationService moderation;
+
+    @Test
+    void adminSeesAndLiftsBans() throws Exception {
+        given(moderation.list()).willReturn(List.of(new com.healingroom.domain.moderation.dto.BanResponse(
+                "b1", "chat", "씨발", "11112222", "1.2.3.4", 1L, 2L)));
+        mvc.perform(get("/api/admin/bans").header("X-Admin-Token", "secret"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].ip").value("1.2.3.4"))
+                .andExpect(jsonPath("$[0].word").value("씨발"));
+        mvc.perform(delete("/api/admin/bans/b1").header("X-Admin-Token", "secret")).andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(moderation).lift("b1");
+    }
+
     @Test
     void adminChangesRoomSettings() throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/admin/rooms/ab3k9xqz/settings")

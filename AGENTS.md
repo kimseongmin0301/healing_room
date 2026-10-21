@@ -110,6 +110,9 @@
       │  │  │                       AdminService (관리자 키 확인, 모든 방 접속자·전체 IP)
       │  │  ├─ dto/                 AdminLoginRequest, AdminPresenceResponse
       │  │  └─ exception/           AdminException (설정 없음 404, 키·로그인 틀림 401, 잠금 429)
+      │  ├─ moderation/             ← 욕설·음란어 30분 제한
+      │  │  ├─ service/             ProfanityFilter (resources/moderation/badwords.txt·allow.txt), ModerationService (IP·방문자 제한, 관리자 풀기)
+      │  │  ├─ dto/ exception/      BanResponse, ModerationException (Banned 403)
       │  ├─ visitor/                ← 방문자 번호 (로그인 없이 브라우저 구분)
       │  │                          VisitorController (GET /api/visitor), VisitorCookie (쿠키 hr_vid, WebSocket 연결 때도 읽음)
       │  └─ presence/               ← 방 접속(누가 어느 방에 있는지, 방장, 닉네임, IP), 내보내기
@@ -279,6 +282,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | GET | `/api/admin/rooms` | **관리자** 열려 있는 모든 방(빈 방·숨은 기본 방 포함) + 테마·인원·최대 인원 |
 | PUT | `/api/admin/rooms/{id}/settings` | **관리자** 방 설정 바꾸기 `{ name, themeId, maxPeople }` → `room-updated`. 기본 방은 이름·최대 인원만(테마를 바꾸면 403) |
 | DELETE | `/api/admin/rooms/{id}` | **관리자** 방 없애기(닫기) → 방 사람 모두에게 `room-closed`(`by:"admin"`) 후 4002, 채팅 삭제. 기본 방 403 |
+| GET · DELETE | `/api/admin/bans`, `/api/admin/bans/{id}` | **관리자** 욕설·음란어로 제한된 사람(전체 IP·걸린 말) / 제한 풀기 |
 | POST | `/api/feedback` | 로비 의견 보내기 `{ "message" }` (1~1000자) → 201. 한 브라우저 10분에 3번·사이트 전체 1시간에 60번 넘으면 429 |
 | GET · DELETE | `/api/admin/feedback`, `/api/admin/feedback/{id}` | **관리자** 받은 의견 최근 200개 / 지우기 |
 | POST | `/api/admin/login`, `/api/admin/logout` | 관리자 로그인 `{ username, password }` → 쿠키 `HR_ADMIN`(HttpOnly·Secure·SameSite=Strict, 8시간). 한 IP 5번 틀리면 15분 429 |
@@ -346,6 +350,14 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - **10분 동안 그 방에 다시 못 들어옵니다**(방문자 id 기준, 서버 메모리). 다시 연결하면 `by:"ban"` 알림 후 4001. 들어온 순서도 지워져 다시 오면 맨 뒤(방장 아님)입니다.
 - 금지 중 재접속이 **5초 간격 안으로 5번 연달아** 오면(`KickService.RAPID`·`RAPID_LIMIT`) 사람이 아니라 내보내기 기능 전부터 열려 있던 탭이 혼자 두드리는 것으로 보고 금지를 지금부터 10분으로 늘립니다. 그런 탭은 알림을 몰라 금지가 풀리면 다시 들어와 버리기 때문입니다. 사람이 몇 번 다시 눌러 보는 것으로는 늘어나지 않습니다.
 - 방문자 id 는 쿠키(`hr_vid`)에도 있어 저장소만 지워서는 피할 수 없지만, 쿠키까지 지우거나 시크릿 창을 쓰면 새 사람으로 보이므로 완벽한 차단은 아닙니다(장난 방지용).
+
+### 욕설·음란어 제한 (moderation: ProfanityFilter, ModerationService)
+- 채팅(내용·닉네임, `ChatController`), 방 이름(방 만들기·방장 설정, `RoomController`), 닉네임(WebSocket 입장·변경, `RoomSocketHandler`)을 검사합니다. 관리자가 바꾸는 방 이름은 검사하지 않습니다.
+- 걸리면 **IP 와 방문자 번호 둘 다 30분**(`ModerationService.BAN`) 제한: 채팅·방 만들기 403, 방 입장 거절(`kicked` `by:"profanity"` 후 4001), 들어가 있던 모든 방에서도 나갑니다(`KickService.removeEverywhere`, 같은 IP 의 다른 사람도). 화면은 슬픈 고양이 창 + 저장된 닉네임을 새 무작위로 바꿈(닉네임이 원인이면 다시 막히지 않게).
+- 목록: `resources/moderation/badwords.txt`(막는 말), `allow.txt`(품고 있지만 평범한 말: 시발점·자위대·수박씨 발라 등), 출처 `THIRD_PARTY.md`(MIT·CC BY 4.0). 공개 목록을 그대로 합치면 욕 아닌 문장의 65% 가 걸려서 **확실한 욕설·음란어만 골라 다듬은 목록**입니다. 평범한 말을 품는 짧은 말(보지·자지·새끼·미친·사정·발기·니미·야동)은 넣지 않거나 예외를 둡니다.
+- 비교: 소문자·전각→반각, 한글·자모·영문·숫자만(NFKC 는 자음 ㅂ·ㅄ 를 바꿔 버려서 쓰지 않음). 띄어쓴 단어마다 보고, **한 글자 단어는 이웃과 붙여서도** 봄("씨 발", "ㅅ ㅂ", "f u c k"). 띄어쓰기를 다 지우면 "했으니 미련"→"니미" 같은 경계 오탐이 나서입니다. 숫자를 지운 글자도 봄("시1발").
+- **목록을 고치면 `ProfanityFilterTests`** 에 멀쩡한 문장·욕 문장을 더하고 돌립니다. 오탐 의견이 오면 `allow.txt` 에 더합니다.
+- 관리자 화면 "이용 제한": 걸린 시각·어디서·걸린 말·전체 IP·방문자·풀리는 시각, **제한 풀기**(`GET/DELETE /api/admin/bans`). 제한 목록은 서버 메모리(재시작하면 풀림). IP·쓴 글은 로그에 남기지 않고 걸린 말만 남깁니다.
 
 ### 의견 보내기 (FeedbackService)
 - `POST /api/feedback` 익명. 제어 문자 정리, 1~1000자. 한 브라우저(방문자 id) 10분에 3번, 사이트 전체 1시간에 60번(방문자 id 는 바꿀 수 있어 전체 한도도 둠). IP·연락처 저장 안 함.
@@ -453,6 +465,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 - [x] 방장·관리자 내보내기 (10분 재입장 금지, 슬픈 고양이 창), 방문자 id 쿠키 함께 저장
 - [x] 방장의 방 설정 바꾸기(이름·테마·최대 인원)·방 닫기, 방 만들 때 최대 인원(V11)
 - [x] 만든 사람 footer, 개인정보처리방침(`/privacy`)
+- [x] 욕설·음란어 거르기 + IP·방문자 30분 제한, 관리자 제한 풀기
 - [x] 관리자 방 관리 (모든 방의 이름·테마·최대 인원 바꾸기, 방 없애기. 기본 방은 이름·최대 인원만)
 - [ ] 테마별 배경 영상 (선택)
 - 방문자 로그인은 **만들지 않습니다** (익명 서비스). 로그인은 관리자 화면에만 있습니다.

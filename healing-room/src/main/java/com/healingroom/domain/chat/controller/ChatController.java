@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.healingroom.domain.chat.dto.ChatMessageResponse;
 import com.healingroom.domain.chat.dto.ChatSendRequest;
 import com.healingroom.domain.chat.service.ChatService;
+import com.healingroom.domain.moderation.service.ModerationService;
+import com.healingroom.global.util.ClientRequest;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 /** 방 채팅 API. 새 메시지는 WebSocket(type=chat)으로도 받는다 */
 @RestController
@@ -23,8 +27,11 @@ public class ChatController {
 
     private final ChatService chatService;
 
-    public ChatController(ChatService chatService) {
+    private final ModerationService moderation;
+
+    public ChatController(ChatService chatService, ModerationService moderation) {
         this.chatService = chatService;
+        this.moderation = moderation;
     }
 
     /** 지난 대화 (오래된 것부터, 최근 100개까지) */
@@ -38,7 +45,10 @@ public class ChatController {
     @PostMapping
     public ResponseEntity<ChatMessageResponse> send(@PathVariable String roomId,
                                                     @RequestHeader("X-Visitor-Id") String visitorId,
-                                                    @RequestBody ChatSendRequest request) {
+                                                    @RequestBody ChatSendRequest request,
+                                                    HttpServletRequest http) {
+        // 욕설·음란어면 30분 제한 (제한 중이어도 403)
+        moderation.check(visitorId, ClientRequest.ip(http), "chat", request.nickname(), request.text());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(chatService.send(roomId, visitorId, request.nickname(), request.text()));
     }

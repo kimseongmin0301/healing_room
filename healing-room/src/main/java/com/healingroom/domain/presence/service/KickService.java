@@ -96,6 +96,26 @@ public class KickService {
         close(session, json.writeValueAsString(KickedPush.of("ban", until)));
     }
 
+    /**
+     * 욕설·음란어 제한(ModerationService): 그 방문자 번호나 IP 의 모든 방 연결에 알리고 끊는다 (by=profanity).
+     * 같은 IP 의 다른 사람도 함께 나간다 (IP 로도 막으므로)
+     */
+    public void removeEverywhere(String visitorId, String ip, long until) {
+        String text = json.writeValueAsString(KickedPush.of("profanity", until));
+        for (String roomId : sessions.activeRooms()) {
+            for (RoomSessionRegistry.Connection connection : sessions.connections(roomId)) {
+                if (connection.visitorId().equals(visitorId) || (ip != null && ip.equals(connection.ip()))) {
+                    close(connection.session(), text);
+                }
+            }
+        }
+    }
+
+    /** 욕설·음란어로 제한 중인 사람이 방에 들어오려 할 때 */
+    public void refuseProfane(WebSocketSession session, long until) {
+        close(session, json.writeValueAsString(KickedPush.of("profanity", until)));
+    }
+
     private static void close(WebSocketSession session, String text) {
         try {
             session.sendMessage(new TextMessage(text));

@@ -18,6 +18,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.healingroom.domain.chat.service.ChatPolicy;
+import com.healingroom.domain.moderation.service.ModerationService;
 import com.healingroom.domain.presence.dto.PresencePush;
 import com.healingroom.domain.presence.service.KickService;
 import com.healingroom.domain.presence.service.RoomBroadcaster;
@@ -57,15 +58,18 @@ public class RoomSocketHandler extends TextWebSocketHandler {
     private final RoomService roomService;
     private final QueueService queueService;
     private final KickService kickService;
+    private final ModerationService moderation;
     private final JsonMapper json;
 
     public RoomSocketHandler(RoomSessionRegistry sessions, RoomBroadcaster broadcaster, RoomService roomService,
-                             QueueService queueService, KickService kickService, JsonMapper json) {
+                             QueueService queueService, KickService kickService, ModerationService moderation,
+                             JsonMapper json) {
         this.sessions = sessions;
         this.broadcaster = broadcaster;
         this.roomService = roomService;
         this.queueService = queueService;
         this.kickService = kickService;
+        this.moderation = moderation;
         this.json = json;
     }
 
@@ -87,6 +91,15 @@ public class RoomSocketHandler extends TextWebSocketHandler {
             raw.close(CloseStatus.POLICY_VIOLATION);
             return;
         }
+        // 욕설·음란어로 제한 중이거나 닉네임이 욕이면 들어오지 못하게 알리고 끊는다 (닉네임이 욕이면 30분 제한)
+        String ip = (String) raw.getAttributes().get(ClientIpHandshakeInterceptor.CLIENT_IP);
+        String visitor = visitorId;
+        var profane = moderation.bannedUntil(visitor, ip)
+                .or(() -> moderation.banIfProfane(visitor, ip, "nickname", nickname));
+        if (profane.isPresent()) {
+            kickService.refuseProfane(raw, profane.get());
+            return;
+        }
         // 내보내진 지 10분이 안 됐으면 들어오지 못하게 알리고 끊는다 (다시 두드리면 금지가 지금부터 10분으로 늘어남)
         if (sessions.bannedUntil(roomId, visitorId).isPresent()) {
             kickService.refuse(raw, roomId, visitorId);
@@ -102,7 +115,6 @@ public class RoomSocketHandler extends TextWebSocketHandler {
         WebSocketSession session = new ConcurrentWebSocketSessionDecorator(raw, 5000, 512 * 1024);
         raw.getAttributes().put(ROOM, roomId);
         raw.getAttributes().put(VISITOR, visitorId);
-        String ip = (String) raw.getAttributes().get(ClientIpHandshakeInterceptor.CLIENT_IP);
         sessions.add(roomId, visitorId, session, ip, ChatPolicy.cleanNickname(nickname).orElse("익명"));
         roomService.onPresenceChanged(roomId);
         queueService.onPresenceChanged(roomId); // 여기서 방 전체에 새 음악 상태(인원, 방장)가 나간다
@@ -132,6 +144,11 @@ public class RoomSocketHandler extends TextWebSocketHandler {
         try {
             JsonNode node = json.readTree(payload);
             if ("nickname".equals(node.path("type").asString(""))) {
+                // 욕설·음란어 닉네임이면 30분 제한 (이 연결을 포함해 모든 방에서 나간다)
+                String ip = (String) session.getAttributes().get(ClientIpHandshakeInterceptor.CLIENT_IP);
+                if (moderation.banIfProfane(visitorId.toString(), ip, "nickname", node.path("nickname").asString("")).isPresent()) {
+                    return;
+                }
                 ChatPolicy.cleanNickname(node.path("nickname").asString("")).ifPresent(nickname -> {
                     sessions.setNickname(roomId.toString(), visitorId.toString(), nickname);
                     broadcastPresence(roomId.toString());

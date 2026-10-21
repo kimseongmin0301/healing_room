@@ -19,6 +19,10 @@ import com.healingroom.domain.room.dto.RoomResponse;
 import com.healingroom.domain.room.dto.RoomSettingsRequest;
 import com.healingroom.domain.room.service.RoomResetService;
 import com.healingroom.domain.room.service.RoomService;
+import com.healingroom.domain.moderation.service.ModerationService;
+import com.healingroom.global.util.ClientRequest;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/rooms")
@@ -27,9 +31,12 @@ public class RoomController {
     private final RoomService roomService;
     private final RoomResetService resetService;
 
-    public RoomController(RoomService roomService, RoomResetService resetService) {
+    private final ModerationService moderation;
+
+    public RoomController(RoomService roomService, RoomResetService resetService, ModerationService moderation) {
         this.roomService = roomService;
         this.resetService = resetService;
+        this.moderation = moderation;
     }
 
     /** 기본 방의 기록 초기화 (그 방의 방장만): 지난 신청곡·투표·통계·채팅을 지우고 기본 음악부터 다시 튼다 */
@@ -54,7 +61,8 @@ public class RoomController {
     /** 방 만들기 { "name": "방 이름", "themeId": "cabin", "maxPeople": 6 } (maxPeople 이 없으면 인원 제한 없음) */
     @PostMapping
     public ResponseEntity<RoomResponse> create(@RequestHeader("X-Visitor-Id") String visitorId,
-                                               @RequestBody CreateRoomRequest request) {
+                                               @RequestBody CreateRoomRequest request, HttpServletRequest http) {
+        moderation.check(visitorId, ClientRequest.ip(http), "room-name", request.name()); // 욕설·음란어면 30분 제한
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(roomService.create(visitorId, request.name(), request.themeId(), request.maxPeople()));
     }
@@ -62,7 +70,8 @@ public class RoomController {
     /** 방장: 방 설정 바꾸기 (이름·테마·최대 인원). 기본 방은 403 */
     @PutMapping("/{id}/settings")
     public RoomResponse changeSettings(@PathVariable String id, @RequestHeader("X-Visitor-Id") String visitorId,
-                                       @RequestBody RoomSettingsRequest request) {
+                                       @RequestBody RoomSettingsRequest request, HttpServletRequest http) {
+        moderation.check(visitorId, ClientRequest.ip(http), "room-name", request.name());
         return roomService.changeSettingsByHost(id, visitorId, request.name(), request.themeId(), request.maxPeople());
     }
 

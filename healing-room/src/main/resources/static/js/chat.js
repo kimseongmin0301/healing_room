@@ -150,6 +150,12 @@ export async function enterChat(id) {
   renderEmpty();
 }
 
+/** 욕설·음란어 닉네임으로 제한됐을 수 있으니 새 무작위 닉네임으로 바꿔 둔다 (그대로면 다시 들어올 때 또 막힌다) */
+export function resetNickname() {
+  nickname = `${pick(ADJECTIVES)} ${pick(NOUNS)}`;
+  store.set('chatNickname', nickname);
+}
+
 export function leaveChat() {
   roomId = null;
 }

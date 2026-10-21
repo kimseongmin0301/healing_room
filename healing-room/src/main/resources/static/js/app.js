@@ -7,7 +7,7 @@ import { connectRoom } from './room-socket.js';
 import { showLobby, hideLobby, openRoomSettings } from './lobby.js';
 import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAudible, isMusicStuck } from './music.js';
 import { enterMixer, leaveMixer, setAmbientEnabled, onMixerInput } from './audio/mixer.js';
-import { initChat, enterChat, leaveChat, receiveChat, clearChat, getNickname } from './chat.js';
+import { initChat, enterChat, leaveChat, receiveChat, clearChat, getNickname, resetNickname } from './chat.js';
 import { renderPeople, resetPeople } from './people.js';
 import { initSupport } from './support.js';
 import { initFeedback } from './feedback.js';
@@ -178,6 +178,11 @@ function showNotice(title, text) {
 /** 내보내졌을 때 창: 누가 내보냈는지, 언제 다시 들어올 수 있는지 */
 function showKicked({ by, until }) {
   const at = new Date(until).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  if (by === 'profanity') {
+    resetNickname();
+    showNotice('이용이 잠시 제한됐어요', `욕설이나 음란한 말을 써서 ${at}까지 채팅·방 만들기·방 입장이 제한됐어요. 모두가 쉬어 가는 곳이니 고운 말 부탁해요.`);
+    return;
+  }
   showNotice(by === 'ban' ? '아직 이 방에 들어갈 수 없어요' : '방에서 내보내졌어요',
     by === 'host' ? `방장이 이 방에서 내보냈어요. ${at} 이후에 다시 들어올 수 있어요.`
       : by === 'admin' ? `관리자가 이 방에서 내보냈어요. ${at} 이후에 다시 들어올 수 있어요.`

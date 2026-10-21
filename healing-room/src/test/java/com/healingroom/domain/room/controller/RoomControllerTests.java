@@ -42,6 +42,22 @@ class RoomControllerTests {
     @MockitoBean
     RoomResetService resetService;
 
+    @MockitoBean
+    com.healingroom.domain.moderation.service.ModerationService moderation;
+
+    @Test
+    void profaneRoomNameIsRefused() throws Exception {
+        org.mockito.BDDMockito.willThrow(new com.healingroom.domain.moderation.exception.ModerationException.Banned(System.currentTimeMillis()))
+                .given(moderation).check(org.mockito.ArgumentMatchers.eq(VISITOR), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.eq("room-name"), org.mockito.ArgumentMatchers.eq("나쁜 방"));
+        mvc.perform(post("/api/rooms").header("X-Visitor-Id", VISITOR).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"나쁜 방\",\"themeId\":\"cabin\"}"))
+                .andExpect(status().isForbidden());
+        org.mockito.Mockito.verify(roomService, org.mockito.Mockito.never())
+                .create(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
     @Test
     void resetByNonHostIs403() throws Exception {
         org.mockito.BDDMockito.willThrow(new RoomException.ResetNotAllowed()).given(resetService).resetByHost("sea", VISITOR);
