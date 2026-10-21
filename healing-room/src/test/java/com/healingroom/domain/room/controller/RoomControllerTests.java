@@ -45,6 +45,12 @@ class RoomControllerTests {
     @MockitoBean
     com.healingroom.domain.moderation.service.ModerationService moderation;
 
+    @org.junit.jupiter.api.BeforeEach
+    void maskReturnsTextAsIs() {
+        given(moderation.mask(org.mockito.ArgumentMatchers.any()))
+                .willAnswer(org.mockito.AdditionalAnswers.returnsFirstArg());
+    }
+
     @Test
     void profaneRoomNameIsRefused() throws Exception {
         org.mockito.BDDMockito.willThrow(new com.healingroom.domain.moderation.exception.ModerationException.Banned(System.currentTimeMillis()))

@@ -115,7 +115,7 @@ public class RoomSocketHandler extends TextWebSocketHandler {
         WebSocketSession session = new ConcurrentWebSocketSessionDecorator(raw, 5000, 512 * 1024);
         raw.getAttributes().put(ROOM, roomId);
         raw.getAttributes().put(VISITOR, visitorId);
-        sessions.add(roomId, visitorId, session, ip, ChatPolicy.cleanNickname(nickname).orElse("익명"));
+        sessions.add(roomId, visitorId, session, ip, ChatPolicy.cleanNickname(moderation.mask(nickname)).orElse("익명"));
         roomService.onPresenceChanged(roomId);
         queueService.onPresenceChanged(roomId); // 여기서 방 전체에 새 음악 상태(인원, 방장)가 나간다
         broadcastPresence(roomId);
@@ -149,7 +149,7 @@ public class RoomSocketHandler extends TextWebSocketHandler {
                 if (moderation.banIfProfane(visitorId.toString(), ip, "nickname", node.path("nickname").asString("")).isPresent()) {
                     return;
                 }
-                ChatPolicy.cleanNickname(node.path("nickname").asString("")).ifPresent(nickname -> {
+                ChatPolicy.cleanNickname(moderation.mask(node.path("nickname").asString(""))).ifPresent(nickname -> {
                     sessions.setNickname(roomId.toString(), visitorId.toString(), nickname);
                     broadcastPresence(roomId.toString());
                 });

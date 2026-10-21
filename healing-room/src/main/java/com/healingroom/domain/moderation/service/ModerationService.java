@@ -67,6 +67,11 @@ public class ModerationService {
         }
     }
 
+    /** 평범한 말에도 들어 있는 애매한 말(mask.txt)은 제한하지 않고 * 로 가린다 */
+    public String mask(String text) {
+        return filter.mask(text);
+    }
+
     /** 욕이 있는지만 본다 (WebSocket 처럼 예외 대신 직접 처리할 때). 있으면 제한을 걸고 풀리는 시각을 돌려준다 */
     public Optional<Long> banIfProfane(String visitorId, String ip, String where, String text) {
         return filter.find(text).map(word -> ban(visitorId, ip, where, word));

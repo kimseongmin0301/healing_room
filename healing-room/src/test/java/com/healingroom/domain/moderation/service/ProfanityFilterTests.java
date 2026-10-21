@@ -33,6 +33,34 @@ class ProfanityFilterTests {
         assertThat(filter.find(text)).as(text).isPresent();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+            "보지 마세요 스포 있어요|** 마세요 스포 있어요",
+            "남자지만 이 노래 좋아함|남**만 이 노래 좋아함",
+            "새끼손가락 다쳤어|**손가락 다쳤어",
+            "오늘 노래 미친 듯이 좋다|오늘 노래 ** 듯이 좋다",
+            "보.지|*.*",
+            "Sexy music|***y music",
+            "졸린 고양이 안녕하세요|졸린 고양이 안녕하세요",
+            "보 지|보 지"
+    })
+    void ambiguousWordsAreMaskedNotBanned(String text, String masked) {
+        assertThat(filter.mask(text)).isEqualTo(masked);
+        assertThat(filter.find(text)).as("가리기만 하고 제한하지 않음: " + text).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"딜도", "애무", "오나홀", "빠구리", "hentai", "정액"})
+    void moreSexualWordsAreFound(String text) {
+        assertThat(filter.find(text)).as(text).isPresent();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"애널리스트 보고서", "정액권 끊었어", "정액제 요금"})
+    void sexualWordsInsideNormalWordsPass(String text) {
+        assertThat(filter.find(text)).as(text).isEmpty();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"", "   "})
     void emptyIsFine(String text) {

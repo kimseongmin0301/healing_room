@@ -64,7 +64,7 @@ public class RoomController {
                                                @RequestBody CreateRoomRequest request, HttpServletRequest http) {
         moderation.check(visitorId, ClientRequest.ip(http), "room-name", request.name()); // 욕설·음란어면 30분 제한
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(roomService.create(visitorId, request.name(), request.themeId(), request.maxPeople()));
+                .body(roomService.create(visitorId, moderation.mask(request.name()), request.themeId(), request.maxPeople()));
     }
 
     /** 방장: 방 설정 바꾸기 (이름·테마·최대 인원). 기본 방은 403 */
@@ -72,7 +72,7 @@ public class RoomController {
     public RoomResponse changeSettings(@PathVariable String id, @RequestHeader("X-Visitor-Id") String visitorId,
                                        @RequestBody RoomSettingsRequest request, HttpServletRequest http) {
         moderation.check(visitorId, ClientRequest.ip(http), "room-name", request.name());
-        return roomService.changeSettingsByHost(id, visitorId, request.name(), request.themeId(), request.maxPeople());
+        return roomService.changeSettingsByHost(id, visitorId, moderation.mask(request.name()), request.themeId(), request.maxPeople());
     }
 
     /** 방장: 방 닫기. 방에 있던 사람들은 로비로 간다. 기본 방은 403 */
