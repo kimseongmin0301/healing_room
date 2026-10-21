@@ -17,14 +17,15 @@ import org.springframework.stereotype.Component;
 /**
  * 욕설·음란어 찾기. 목록은 resources/moderation/badwords.txt, 예외(평범한 말)는 allow.txt.
  *
- * <p>비교 방법: 소문자로 바꾸고 전각 영문·숫자(ａ１)를 반각으로, 한글·자음·모음·영문·숫자·띄어쓰기만 남긴다("씨.발" → "씨발").
- * 띄어쓴 단어마다 보고, <b>한 글자 단어는 이웃 단어와 붙여서도</b> 본다("씨 발", "ㅅ ㅂ", "f u c k").
- * 띄어쓰기를 모두 지우면 "했으니 미련" 이 "니미" 로, "금수저야 동수저" 가 "야동" 으로 걸려서 이렇게 한다.
- * 숫자를 지운 글자로도 한 번 더 본다("시1발"). 예외 말은 검사 전에 지운다("시발점", "자위대").
+ * <p>비교 방법: 소문자로 바꾸고 전각 영문·숫자(ａ１)를 반각으로, 한글·자음·모음·영문·숫자·띄어쓰기만 남긴다(기호 끼워 넣기를 무시).
+ * 띄어쓴 단어마다 보고, <b>한 글자 단어는 이웃 단어와 붙여서도</b> 본다(한 글자씩 띄어 쓴 우회).
+ * 띄어쓰기를 모두 지우면 앞 단어의 끝과 뒷 단어의 처음이 이어져 멀쩡한 문장이 걸려서 이렇게 한다.
+ * 숫자를 지운 글자로도 한 번 더 본다(숫자 끼워 넣기). 예외 말(allow.txt)은 검사 전에 지운다.
+ * 실제 예시는 ProfanityFilterTests 에만 둔다 (문서·주석·커밋 메시지에는 목록의 단어를 쓰지 않는다).
  *
  * <p>목록을 고치면 ProfanityFilterTests 를 돌린다. 걸리면 30분 이용 제한이라 오탐이 없게 다듬은 목록만 쓴다.
  *
- * <p>평범한 말에도 들어 있는 애매한 말(보지·자지·새끼·미친 등, mask.txt)은 제한하지 않고 {@link #mask} 로 ** 처럼 가리기만 한다.
+ * <p>평범한 말에도 들어 있는 애매한 말(mask.txt)은 제한하지 않고 {@link #mask} 로 * 처럼 가리기만 한다.
  */
 @Component
 public class ProfanityFilter {
@@ -48,7 +49,7 @@ public class ProfanityFilter {
     ProfanityFilter(List<String> words, List<String> allowed, List<String> masked) {
         this.masked = masked.stream().map(ProfanityFilter::compact).filter(w -> !w.isEmpty()).distinct().toList();
         this.words = words.stream().map(ProfanityFilter::compact).filter(w -> !w.isEmpty()).distinct().toList();
-        // 긴 예외부터 지운다 ("시발자동차" 를 "시발" 보다 먼저)
+        // 긴 예외부터 지운다 (긴 예외 안에 짧은 예외가 들어 있을 수 있어서)
         this.allowed = allowed.stream().map(ProfanityFilter::compact).filter(w -> !w.isEmpty()).distinct()
                 .sorted(Comparator.comparingInt(String::length).reversed()).toList();
     }
@@ -74,8 +75,8 @@ public class ProfanityFilter {
     }
 
     /**
-     * 애매한 말을 * 로 가린다 ("보지 마세요" → "** 마세요"). 원래 글자·띄어쓰기·기호는 그대로 두고 그 글자만 바꾼다.
-     * 기호는 건너뛰어 보고("보.지" → "*.*"), 띄어쓰기는 넘지 않는다.
+     * 애매한 말을 * 로 가린다. 원래 글자·띄어쓰기·기호는 그대로 두고 그 글자만 바꾼다.
+     * 기호는 건너뛰어 보고(기호를 끼워 넣어도 가림), 띄어쓰기는 넘지 않는다.
      */
     public String mask(String text) {
         if (text == null || text.isEmpty() || masked.isEmpty()) {
@@ -134,7 +135,7 @@ public class ProfanityFilter {
         return out;
     }
 
-    /** 소문자, 전각 → 반각, 한글·자모·영문·숫자·띄어쓰기만. (NFKC 는 자음 ㅂ·ㅄ 를 다른 코드로 바꿔 버려서 쓰지 않는다) */
+    /** 소문자, 전각 → 반각, 한글·자모·영문·숫자·띄어쓰기만. (NFKC 는 겹자음 같은 자모를 다른 코드로 바꿔 버려서 쓰지 않는다) */
     static String normalize(String text) {
         StringBuilder sb = new StringBuilder(text.length());
         for (char c : text.toCharArray()) {
