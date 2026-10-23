@@ -41,6 +41,18 @@ public abstract class ChatException extends ApiException {
         }
     }
 
+    public static class HostOnly extends ChatException {
+        public HostOnly() {
+            super(HttpStatus.FORBIDDEN, "방장만 메시지를 지울 수 있어요.");
+        }
+    }
+
+    public static class MessageNotFound extends ChatException {
+        public MessageNotFound() {
+            super(HttpStatus.NOT_FOUND, "이미 지워졌거나 없는 메시지예요.");
+        }
+    }
+
     public static class TooFast extends ChatException {
         public TooFast() {
             super(HttpStatus.TOO_MANY_REQUESTS, "조금 천천히 보내 주세요.");

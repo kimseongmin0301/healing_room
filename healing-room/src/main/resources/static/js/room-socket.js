@@ -6,7 +6,7 @@ import { visitorId } from './api.js';
 // 서버가 일부러 끊은 연결: 4001 내보내짐, 4002 방이 닫힘, 4003 방이 꽉 참 (다시 연결하지 않는다)
 const FINAL_CLOSE = new Set([4001, 4002, 4003]);
 
-export function connectRoom(roomId, { nickname, onState, onChat, onChatClear, onPresence, onStatus, onKicked, onRoomGone, onRoomUpdated }) {
+export function connectRoom(roomId, { nickname, onState, onChat, onChatClear, onChatDelete, onPresence, onStatus, onKicked, onRoomGone, onRoomUpdated }) {
   let ws = null;
   let closed = false;
   let retry = 0;
@@ -28,6 +28,7 @@ export function connectRoom(roomId, { nickname, onState, onChat, onChatClear, on
       else if (message.type === 'chat') onChat?.(message.message);
       else if (message.type === 'presence') onPresence?.(message);
       else if (message.type === 'chat-clear') onChatClear?.();
+      else if (message.type === 'chat-delete') onChatDelete?.(message.id);
       else if (message.type === 'kicked') { closed = true; onKicked?.(message); }
       else if (message.type === 'room-closed' || message.type === 'room-full') { closed = true; onRoomGone?.(message); }
       else if (message.type === 'room-updated') onRoomUpdated?.();

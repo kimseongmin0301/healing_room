@@ -235,6 +235,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 2. Redis List 에 저장(최근 100개만 남김) → `healing-room:chat` 채널로 publish
 3. `RedisConfig` 의 구독자가 받아서 `RoomBroadcaster` 로 이 서버에 접속한 방 사람들에게 `{ type: "chat", message }` 전송. `mine` 은 받는 사람마다 계산하고 **보낸 사람의 방문자 id 는 절대 내보내지 않습니다.**
 4. 방이 닫히면(`RoomClosedEvent`) 그 방의 채팅 키를 지웁니다.
+5. **메시지 하나 지우기**(방장은 방 안 채팅의 🗑, 관리자는 `/admin` "방 관리" → 채팅): List 에서 그 메시지만 `LREM` 하고 `healing-room:chat` 채널로 `{type:"delete", roomId, id}` 를 publish → 각 서버가 방 사람들에게 `{type:"chat-delete", id}` → 화면에서 뺍니다. 이상한 글·이미지를 기록 초기화 없이 지울 때 씁니다.
 - 화면은 메시지를 `textContent`로만 넣습니다(HTML로 해석하지 않음). 서버는 HTML을 바꾸지 않습니다.
 - **이미지**: 채팅 창에 붙여넣기(Ctrl+V)·끌어다 놓기로만 붙입니다(파일 선택 버튼 없음). 화면이 최대 800px·WebP(안 되면 JPEG)로 줄여 **data URL** 로 보내고, 서버는 파일로 저장하지 않고 채팅 기록(`ChatRecord.image`, Redis)에 그대로 넣습니다. `ChatImage` 가 JPEG·PNG·WebP 만(SVG 는 스크립트 위험으로 거절), 첫 바이트가 그 형식인지, 160,000자(약 120KB) 이하인지 확인합니다. 이미지만 보낼 때는 글이 비어도 됩니다. 한 사람이 1분에 3장(`healing-room:chat-image-rate:{visitorId}`). 화면에서 누르면 크게 보기(`#image-viewer`). 이미지 내용은 거르지 않으므로 문제가 있으면 방장·관리자 내보내기와 기록 초기화로 지웁니다.
 
@@ -277,6 +278,8 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | GET | `/api/rooms/{roomId}/search?q=` | 직접 검색 (방에 있는 사람만) → `[{ youtubeId, title, channel, thumbnail, seconds }]`. 이 사이트에서 재생 가능·라이브 아님·한국 차단 아님만. 1분에 5번 넘으면 429, 할당량 소진·키 없음 503 |
 | GET | `/api/rooms/{roomId}/chat` | 지난 대화 (오래된 것부터, 최대 100개) `[{ id, nickname, text, sentAt, mine }]` |
 | POST | `/api/rooms/{roomId}/chat` | 채팅 보내기 `{ "nickname", "text", "image"? }` (image 는 data URL, 있으면 text 는 비어도 됨) → 201. 이미지 형식·크기가 틀리면 400, 1분에 3장 넘으면 429. 10초에 6개 넘으면 429, Redis 장애 시 503 |
+| DELETE | `/api/rooms/{roomId}/chat/{messageId}` | **방장** 메시지 하나 지우기 → 204, 방 사람 모두에게 `chat-delete`. 방장 아님 403, 없는 메시지 404 |
+| GET · DELETE | `/api/admin/rooms/{id}/chat`, `/api/admin/rooms/{id}/chat/{messageId}` | **관리자** 방의 최근 대화(이미지 포함) 보기 / 메시지 하나 지우기 |
 | POST | `/api/rooms/{id}/reset` | **기본 방의 방장** 기록 초기화 (지난 신청곡·투표·통계·채팅) → 204, 아니면 403 |
 | POST | `/api/admin/reset?roomId=` | **관리자** 기록 초기화. roomId 가 없으면 모든 방 + YouTube 검색 캐시 |
 | PUT | `/api/rooms/{id}/settings` | **사람이 만든 방의 방장** 설정 바꾸기 `{ name, themeId, maxPeople }` → 방 사람 모두에게 `room-updated`. 기본 방 403 |
@@ -292,7 +295,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | GET · DELETE | `/api/admin/feedback`, `/api/admin/feedback/{id}` | **관리자** 받은 의견 최근 200개 / 지우기 |
 | POST | `/api/admin/login`, `/api/admin/logout` | 관리자 로그인 `{ username, password }` → 쿠키 `HR_ADMIN`(HttpOnly·Secure·SameSite=Strict, 8시간). 한 IP 5번 틀리면 15분 429 |
 | GET | `/api/admin/presence` | **관리자** (로그인 쿠키 + `X-Admin-Token`) 모든 방 접속자: 닉네임, 전체 IP, 방문자 id 앞 8자리, 들어온 시각 |
-| WS | `/ws/rooms/{roomId}?visitorId={uuid}&nickname={닉네임}` | 연결돼 있는 동안 "방에 있음". 서버 → `state`(음악), `chat`(새 채팅), `chat-clear`(채팅 지움), `presence`(접속자 목록), `kicked`(내보내짐, 4001), `room-closed`(`by`, 4002), `room-full`(`max`, 4003), `room-updated`(설정 바뀜). 쿠키 `hr_vid` 가 있으면 주소의 visitorId 보다 쿠키를 씁니다. 브라우저 → `{"type":"nickname","nickname":"…"}`(닉네임 변경). 닫힌 방이면 연결 거부 |
+| WS | `/ws/rooms/{roomId}?visitorId={uuid}&nickname={닉네임}` | 연결돼 있는 동안 "방에 있음". 서버 → `state`(음악), `chat`(새 채팅), `chat-clear`(채팅 지움), `chat-delete`(`id`, 메시지 하나 지움), `presence`(접속자 목록), `kicked`(내보내짐, 4001), `room-closed`(`by`, 4002), `room-full`(`max`, 4003), `room-updated`(설정 바뀜). 쿠키 `hr_vid` 가 있으면 주소의 visitorId 보다 쿠키를 씁니다. 브라우저 → `{"type":"nickname","nickname":"…"}`(닉네임 변경). 닫힌 방이면 연결 거부 |
 
 ### 화면 주소 (SiteController)
 | 주소 | 보여주는 것 |

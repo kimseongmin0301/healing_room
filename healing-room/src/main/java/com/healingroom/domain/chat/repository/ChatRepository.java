@@ -73,6 +73,35 @@ public class ChatRepository {
         return deleted;
     }
 
+    /** 메시지 하나를 지운다 (방장·관리자). 없으면 false */
+    public boolean deleteMessage(String roomId, String messageId) {
+        String key = key(roomId);
+        List<String> values = redis.opsForList().range(key, 0, -1);
+        if (values == null) {
+            return false;
+        }
+        for (String value : values) {
+            if (messageId.equals(parse(value).id())) {
+                Long removed = redis.opsForList().remove(key, 1, value);
+                return removed != null && removed > 0;
+            }
+        }
+        return false;
+    }
+
+    /** 메시지 하나가 지워졌음을 모든 서버에 알린다 */
+    public void publishDelete(String roomId, String messageId) {
+        redis.convertAndSend(channel(), json.writeValueAsString(Map.of("type", "delete", "roomId", roomId, "id", messageId)));
+    }
+
+    /** pub/sub 메시지가 "메시지 하나 지움" 알림이면 [방 id, 메시지 id] */
+    public Optional<String[]> deleteTarget(String payload) {
+        var node = json.readTree(payload);
+        return "delete".equals(node.path("type").asString(""))
+                ? Optional.of(new String[] {node.path("roomId").asString(""), node.path("id").asString("")})
+                : Optional.empty();
+    }
+
     /** 채팅이 지워졌음을 모든 서버에 알린다. roomId 가 "*" 이면 모든 방 */
     public void publishClear(String roomId) {
         redis.convertAndSend(channel(), json.writeValueAsString(Map.of("type", "clear", "roomId", roomId)));

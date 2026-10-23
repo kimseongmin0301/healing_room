@@ -24,6 +24,8 @@ import com.healingroom.domain.admin.dto.AdminLoginRequest;
 import com.healingroom.domain.admin.dto.AdminPresenceResponse;
 import com.healingroom.domain.admin.service.AdminLoginService;
 import com.healingroom.domain.admin.service.AdminService;
+import com.healingroom.domain.chat.dto.ChatMessageResponse;
+import com.healingroom.domain.chat.service.ChatService;
 import com.healingroom.domain.feedback.dto.FeedbackResponse;
 import com.healingroom.domain.feedback.service.FeedbackService;
 import com.healingroom.domain.moderation.dto.BanResponse;
@@ -53,10 +55,11 @@ public class AdminController {
     private final KickService kickService;
     private final RoomService roomService;
     private final ModerationService moderation;
+    private final ChatService chatService;
 
     public AdminController(AdminService adminService, AdminLoginService loginService, RoomResetService resetService,
                            FeedbackService feedbackService, KickService kickService, RoomService roomService,
-                           ModerationService moderation) {
+                           ModerationService moderation, ChatService chatService) {
         this.adminService = adminService;
         this.loginService = loginService;
         this.resetService = resetService;
@@ -64,6 +67,7 @@ public class AdminController {
         this.kickService = kickService;
         this.roomService = roomService;
         this.moderation = moderation;
+        this.chatService = chatService;
     }
 
     // ---------------------------------------------------------------- 로그인
@@ -158,6 +162,25 @@ public class AdminController {
                            @PathVariable String id) {
         authorize(session, token);
         roomService.closeByAdmin(id);
+    }
+
+    /** 방의 최근 대화 (이미지 포함, 방에 들어가지 않고 보기) */
+    @GetMapping("/rooms/{id}/chat")
+    public List<ChatMessageResponse> chat(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                                          @RequestHeader(value = TOKEN, required = false) String token,
+                                          @PathVariable String id) {
+        authorize(session, token);
+        return chatService.history(id, null);
+    }
+
+    /** 메시지 하나 지우기 → 방 사람들 화면에서도 사라진다 */
+    @DeleteMapping("/rooms/{id}/chat/{messageId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteChat(@CookieValue(value = AdminLoginService.COOKIE, required = false) String session,
+                           @RequestHeader(value = TOKEN, required = false) String token,
+                           @PathVariable String id, @PathVariable String messageId) {
+        authorize(session, token);
+        chatService.deleteByAdmin(id, messageId);
     }
 
     /** 욕설·음란어로 이용이 제한된 사람 (전체 IP·걸린 말) */

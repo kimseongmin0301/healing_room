@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.healingroom.domain.chat.dto.ChatClearPush;
+import com.healingroom.domain.chat.dto.ChatDeletePush;
 import com.healingroom.domain.chat.dto.ChatMessageResponse;
 import com.healingroom.domain.chat.dto.ChatPush;
 import com.healingroom.domain.chat.entity.ChatRecord;
@@ -132,8 +133,39 @@ public class ChatService {
             rooms.forEach(roomId -> broadcaster.send(roomId, visitorId -> ChatClearPush.INSTANCE));
             return;
         }
+        var deleted = repository.deleteTarget(payload);
+        if (deleted.isPresent()) {
+            broadcaster.send(deleted.get()[0], visitorId -> ChatDeletePush.of(deleted.get()[1]));
+            return;
+        }
         ChatRecord record = repository.parse(payload);
         broadcaster.send(record.roomId(), visitorId -> ChatPush.of(ChatMessageResponse.of(record, visitorId)));
+    }
+
+    /** 방장: 자기 방의 메시지 하나 지우기 (이상한 글·이미지) */
+    public void deleteByHost(String roomId, String visitorId, String messageId) {
+        if (visitorId == null || !sessions.isHost(roomId, visitorId)) {
+            throw new ChatException.HostOnly();
+        }
+        delete(roomId, messageId);
+    }
+
+    /** 관리자: 어느 방이든 메시지 하나 지우기 (권한 확인은 관리자 컨트롤러에서) */
+    public void deleteByAdmin(String roomId, String messageId) {
+        delete(roomId, messageId);
+    }
+
+    private void delete(String roomId, String messageId) {
+        try {
+            if (!repository.deleteMessage(roomId, messageId)) {
+                throw new ChatException.MessageNotFound();
+            }
+            repository.publishDelete(roomId, messageId); // 모든 서버의 방 사람들 화면에서도 지우게
+        } catch (DataAccessException e) {
+            log.warn("채팅 메시지 삭제 실패 (room={}): {}", roomId, e.getMostSpecificCause().getMessage());
+            throw new ChatException.Unavailable();
+        }
+        log.info("채팅 메시지 하나 지움 (room={})", roomId);
     }
 
     /** 방의 대화를 모두 지우고, 방에 있는 사람들 화면에서도 지우게 한다 */

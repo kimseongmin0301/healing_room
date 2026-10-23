@@ -223,6 +223,7 @@ function renderRoomAdmin(rooms) {
     actions.append(button('저장', () => saveRoom(room, {
       name: name.value.trim(), themeId: theme.value, maxPeople: max.value ? Number(max.value) : null,
     })));
+    actions.append(button('채팅', () => loadRoomChat(room)));
     if (!room.isDefault) actions.append(button('없애기', () => deleteRoom(room)));
 
     const cellOf = el => { const td = document.createElement('td'); td.append(el); return td; };
@@ -236,6 +237,55 @@ function renderRoomAdmin(rooms) {
 }
 
 $('room-reload').addEventListener('click', loadRooms);
+
+// ---------------------------------------------------------------- 방 채팅 보기·메시지 하나 지우기
+
+let chatRoom = null;
+
+async function loadRoomChat(room) {
+  chatRoom = room;
+  $('room-chat-section').hidden = false;
+  $('room-chat-title').textContent = `${room.name} (/${room.id})`;
+  try {
+    renderRoomChat(await adminRequest('GET', `/api/admin/rooms/${encodeURIComponent(room.id)}/chat`));
+  } catch (e) {
+    $('room-chat').textContent = e.message;
+  }
+  $('room-chat-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderRoomChat(list) {
+  if (!list.length) { $('room-chat').textContent = '대화가 없어요.'; return; }
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th>시각</th><th>닉네임</th><th>내용</th><th></th></tr></thead>';
+  const body = document.createElement('tbody');
+  for (const m of [...list].reverse()) { // 최근 것부터
+    const content = cell(m.text ?? '', 'text');
+    if (typeof m.image === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(m.image)) {
+      const img = Object.assign(document.createElement('img'), { src: m.image, alt: '채팅 이미지' });
+      img.style.cssText = 'display:block;max-width:160px;max-height:120px;margin-top:4px;border-radius:6px';
+      content.append(img);
+    }
+    const action = document.createElement('td');
+    action.append(button('지우기', async () => {
+      if (!confirm('이 메시지를 지울까요? 방에 있는 사람들 화면에서도 사라져요.')) return;
+      try {
+        await adminRequest('DELETE', `/api/admin/rooms/${encodeURIComponent(chatRoom.id)}/chat/${encodeURIComponent(m.id)}`);
+        $('status').textContent = '메시지를 지웠어요.';
+      } catch (e) {
+        $('status').textContent = e.message;
+      }
+      loadRoomChat(chatRoom);
+    }));
+    const tr = document.createElement('tr');
+    tr.append(cell(timeText(m.sentAt)), cell(m.nickname), content, action);
+    body.append(tr);
+  }
+  table.append(body);
+  $('room-chat').replaceChildren(table);
+}
+
+$('room-chat-close').addEventListener('click', () => { $('room-chat-section').hidden = true; chatRoom = null; });
 
 function start() {
   clearInterval(timer);

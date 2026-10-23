@@ -52,6 +52,21 @@ class AdminControllerTests {
     @MockitoBean
     com.healingroom.domain.moderation.service.ModerationService moderation;
 
+    @MockitoBean
+    com.healingroom.domain.chat.service.ChatService chatService;
+
+    @Test
+    void adminSeesRoomChatAndDeletesOneMessage() throws Exception {
+        given(chatService.history("ab3k9xqz", null)).willReturn(List.of(
+                new com.healingroom.domain.chat.dto.ChatMessageResponse("m1", "졸린 고양이", "안녕", 1L, false)));
+        mvc.perform(get("/api/admin/rooms/ab3k9xqz/chat").header("X-Admin-Token", "secret"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value("m1"));
+        mvc.perform(delete("/api/admin/rooms/ab3k9xqz/chat/m1").header("X-Admin-Token", "secret"))
+                .andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(chatService).deleteByAdmin("ab3k9xqz", "m1");
+    }
+
     @Test
     void adminSeesAndLiftsBans() throws Exception {
         given(moderation.list()).willReturn(List.of(new com.healingroom.domain.moderation.dto.BanResponse(

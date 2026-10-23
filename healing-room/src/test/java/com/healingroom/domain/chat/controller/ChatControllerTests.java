@@ -35,6 +35,23 @@ class ChatControllerTests {
     @MockitoBean
     com.healingroom.domain.moderation.service.ModerationService moderation;
 
+    @Test
+    void hostDeletesOneMessage() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/rooms/cabin/chat/m1")
+                        .header("X-Visitor-Id", VISITOR))
+                .andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(chatService).deleteByHost("cabin", VISITOR, "m1");
+    }
+
+    @Test
+    void notHostCannotDelete() throws Exception {
+        org.mockito.BDDMockito.willThrow(new ChatException.HostOnly()).given(chatService).deleteByHost("cabin", VISITOR, "m1");
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/rooms/cabin/chat/m1")
+                        .header("X-Visitor-Id", VISITOR))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("방장만 메시지를 지울 수 있어요."));
+    }
+
     @org.junit.jupiter.api.BeforeEach
     void maskReturnsTextAsIs() {
         given(moderation.mask(org.mockito.ArgumentMatchers.any()))

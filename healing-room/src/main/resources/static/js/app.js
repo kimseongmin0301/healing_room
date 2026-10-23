@@ -7,7 +7,7 @@ import { connectRoom } from './room-socket.js';
 import { showLobby, hideLobby, openRoomSettings } from './lobby.js';
 import { initMusic, enterMusic, leaveMusic, applyState, setMusicMuted, onMusicAudible, isMusicStuck } from './music.js';
 import { enterMixer, leaveMixer, setAmbientEnabled, onMixerInput } from './audio/mixer.js';
-import { initChat, enterChat, leaveChat, receiveChat, clearChat, getNickname, resetNickname } from './chat.js';
+import { initChat, enterChat, leaveChat, receiveChat, clearChat, removeChat, setChatHost, getNickname, resetNickname } from './chat.js';
 import { renderPeople, resetPeople } from './people.js';
 import { initSupport } from './support.js';
 import { initFeedback } from './feedback.js';
@@ -116,6 +116,7 @@ async function enterRoom(id) {
     nickname: getNickname,
     onChat: receiveChat,
     onChatClear: clearChat,
+    onChatDelete: removeChat, // 방장·관리자가 메시지 하나를 지웠을 때
     onPresence: people => renderPeople(people, room.id),
     // 내보내지면 로비로 가서 슬픈 고양이 창을 띄운다 (다시 연결하지 않는다)
     onKicked: info => { showKicked(info); go('/', { replace: true }); },
@@ -131,6 +132,7 @@ async function enterRoom(id) {
       applyState(state);
       setPresence(state.listeners);
       $('host-chip').hidden = !state.hostIsMe;
+      setChatHost(state.hostIsMe); // 방장에게만 메시지 지우기 버튼
       $('reset-room').hidden = !(current?.isDefault && state.hostIsMe); // 기본 방의 방장만
       $('room-settings').hidden = !(current && !current.isDefault && state.hostIsMe); // 사람이 만든 방의 방장만
     },

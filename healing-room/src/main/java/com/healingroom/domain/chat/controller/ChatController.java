@@ -42,6 +42,14 @@ public class ChatController {
     }
 
     /** 보내기 { "nickname": "졸린 고양이", "text": "안녕하세요" } */
+    /** 방장: 메시지 하나 지우기 → 방 사람들 화면에서도 사라진다 (chat-delete) */
+    @org.springframework.web.bind.annotation.DeleteMapping("/{messageId}")
+    public ResponseEntity<Void> delete(@PathVariable String roomId, @PathVariable String messageId,
+                                       @RequestHeader("X-Visitor-Id") String visitorId) {
+        chatService.deleteByHost(roomId, visitorId, messageId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping
     public ResponseEntity<ChatMessageResponse> send(@PathVariable String roomId,
                                                     @RequestHeader("X-Visitor-Id") String visitorId,

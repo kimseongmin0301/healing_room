@@ -41,11 +41,15 @@ function append(message, { scroll = false } = {}) {
   const stick = scroll || nearBottom();
   const li = document.createElement('li');
   li.className = `chat-line${message.mine ? ' mine' : ''}`;
+  li.dataset.id = message.id;
   const who = Object.assign(document.createElement('span'), { className: 'who', textContent: message.nickname });
   who.style.color = colorFor(message.nickname);
   const text = Object.assign(document.createElement('span'), { textContent: message.text }); // textContent: HTML 로 해석하지 않음
   const when = Object.assign(document.createElement('span'), { className: 'when', textContent: timeText(message.sentAt) });
-  li.append(who, text, when);
+  // 방장에게만 보이는 지우기 버튼 (CSS: .chat-list.host .chat-del)
+  const del = Object.assign(document.createElement('button'), { className: 'chat-del', type: 'button', textContent: '🗑', title: '이 메시지 지우기 (방장)' });
+  del.addEventListener('click', () => deleteMessage(message.id));
+  li.append(who, text, when, del);
   // 이미지: 서버가 확인한 data URL(JPEG·PNG·WebP)만 그린다
   if (typeof message.image === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(message.image)) {
     const img = Object.assign(document.createElement('img'), {
@@ -173,6 +177,18 @@ function closeViewer() {
   $('image-viewer-img').removeAttribute('src');
 }
 
+// ---------------------------------------------------------------- 메시지 하나 지우기 (방장)
+
+async function deleteMessage(id) {
+  if (!roomId || !confirm('이 메시지를 지울까요? 방에 있는 모두의 화면에서 사라져요.')) return;
+  try {
+    await api('DELETE', `/api/rooms/${roomId}/chat/${encodeURIComponent(id)}`);
+    removeChat(id); // 알림(chat-delete)도 오지만 바로 지운다
+  } catch (err) {
+    message(err.message, true);
+  }
+}
+
 function startNicknameEdit() {
   $('chat-nick').hidden = true;
   $('chat-nick-form').hidden = false;
@@ -269,6 +285,17 @@ export function clearChat() {
   setUnread(0);
   renderEmpty();
   message('대화 기록이 초기화됐어요');
+}
+
+/** 방장이면 메시지마다 지우기 버튼을 보인다 */
+export function setChatHost(isHost) {
+  list.classList.toggle('host', !!isHost);
+}
+
+/** 방장·관리자가 지운 메시지를 화면에서 뺀다 */
+export function removeChat(id) {
+  [...list.children].find(li => li.dataset.id === id)?.remove();
+  renderEmpty();
 }
 
 /** WebSocket 으로 받은 새 메시지 */
