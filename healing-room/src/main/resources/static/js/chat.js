@@ -224,8 +224,8 @@ export function initChat() {
   $('chat-nick-form').addEventListener('submit', finishNicknameEdit);
   $('chat-nick-input').addEventListener('keydown', e => { if (e.key === 'Escape') finishNicknameEdit(); });
   $('chat-toggle').addEventListener('click', () => setCollapsed(!collapsed()));
-  // 이미지: 휴대폰·태블릿(터치 기기)은 🖼 버튼으로 사진첩·카메라에서 고른다 (끌어다 놓기가 없고 붙여넣기도 기기마다 달라서)
-  if (matchMedia('(pointer: coarse)').matches) $('chat-input').placeholder = '메시지 · 🖼 로 사진 보내기';
+  // 이미지: 휴대폰·태블릿(터치 기기)은 📷 버튼으로 사진첩·카메라에서 고른다 (끌어다 놓기가 없고 붙여넣기도 기기마다 달라서)
+  if (matchMedia('(pointer: coarse)').matches) $('chat-input').placeholder = '메시지 · 📷 로 사진 보내기';
   $('chat-pick').addEventListener('click', () => $('chat-file').click());
   $('chat-file').addEventListener('change', () => {
     attach($('chat-file').files?.[0]);

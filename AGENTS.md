@@ -237,7 +237,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 4. 방이 닫히면(`RoomClosedEvent`) 그 방의 채팅 키를 지웁니다.
 5. **메시지 하나 지우기**(방장은 방 안 채팅의 🗑, 관리자는 `/admin` "방 관리" → 채팅): List 에서 그 메시지만 `LREM` 하고 `healing-room:chat` 채널로 `{type:"delete", roomId, id}` 를 publish → 각 서버가 방 사람들에게 `{type:"chat-delete", id}` → 화면에서 뺍니다. 이상한 글·이미지를 기록 초기화 없이 지울 때 씁니다.
 - 화면은 메시지를 `textContent`로만 넣습니다(HTML로 해석하지 않음). 서버는 HTML을 바꾸지 않습니다.
-- **이미지**: PC 는 채팅 창에 붙여넣기(Ctrl+V)·끌어다 놓기로 붙이고, **터치 기기(휴대폰·태블릿, `@media (pointer: coarse)`)에만** 입력칸 옆 🖼 버튼(`#chat-pick` → `<input type=file accept=image/*>`, 사진첩·카메라)이 보입니다(끌어다 놓기가 없고 붙여넣기도 기기마다 달라서). 화면이 최대 800px·WebP(안 되면 JPEG)로 줄여 **data URL** 로 보내고, 서버는 파일로 저장하지 않고 채팅 기록(`ChatRecord.image`, Redis)에 그대로 넣습니다. `ChatImage` 가 JPEG·PNG·WebP 만(SVG 는 스크립트 위험으로 거절), 첫 바이트가 그 형식인지, 160,000자(약 120KB) 이하인지 확인합니다. 이미지만 보낼 때는 글이 비어도 됩니다. 한 사람이 1분에 3장(`healing-room:chat-image-rate:{visitorId}`). 화면에서 누르면 크게 보기(`#image-viewer`). 이미지 내용은 거르지 않으므로 문제가 있으면 방장·관리자 내보내기와 기록 초기화로 지웁니다.
+- **이미지**: PC 는 채팅 창에 붙여넣기(Ctrl+V)·끌어다 놓기로 붙이고, **터치 기기(휴대폰·태블릿, `@media (pointer: coarse)`)에만** 입력칸 옆 📷 버튼(`#chat-pick` → `<input type=file accept=image/*>`, 사진첩·카메라)이 보입니다(끌어다 놓기가 없고 붙여넣기도 기기마다 달라서). 화면이 최대 800px·WebP(안 되면 JPEG)로 줄여 **data URL** 로 보내고, 서버는 파일로 저장하지 않고 채팅 기록(`ChatRecord.image`, Redis)에 그대로 넣습니다. `ChatImage` 가 JPEG·PNG·WebP 만(SVG 는 스크립트 위험으로 거절), 첫 바이트가 그 형식인지, 160,000자(약 120KB) 이하인지 확인합니다. 이미지만 보낼 때는 글이 비어도 됩니다. 한 사람이 1분에 3장(`healing-room:chat-image-rate:{visitorId}`). 화면에서 누르면 크게 보기(`#image-viewer`). 이미지 내용은 거르지 않으므로 문제가 있으면 방장·관리자 내보내기와 기록 초기화로 지웁니다.
 
 ## 7. 환경변수 (`healing-room/.env`)
 
