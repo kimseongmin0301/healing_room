@@ -300,6 +300,8 @@ body:not(.in-room) canvas { display: none; }
   background: rgba(0, 0, 0, .35); border: 1px solid var(--line); outline: none;
 }
 .add input:focus { border-color: var(--accent); }
+.chat-pick { display: none; flex: none; padding: 0 10px; font-size: 16px; }
+@media (pointer: coarse) { .chat-pick { display: inline-flex; align-items: center; } }
 .msg { flex: none; margin: 6px 0 0; min-height: 16px; font-size: 12px; color: var(--muted); }
 .msg.error { color: var(--danger); }
 

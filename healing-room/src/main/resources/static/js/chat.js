@@ -93,7 +93,7 @@ async function send(e) {
   const input = $('chat-input');
   const text = input.value.trim();
   if ((!text && !pendingImage) || !roomId) return;
-  const button = e.submitter ?? $('chat-form').querySelector('button'); // 누른 버튼 정보가 없는 제출(일부 키보드)도 견디게
+  const button = e.submitter ?? $('chat-send'); // 누른 버튼 정보가 없는 제출(일부 키보드)도 견디게
   button.disabled = true;
   try {
     const sent = await api('POST', `/api/rooms/${roomId}/chat`, { nickname, text, image: pendingImage });
@@ -224,6 +224,13 @@ export function initChat() {
   $('chat-nick-form').addEventListener('submit', finishNicknameEdit);
   $('chat-nick-input').addEventListener('keydown', e => { if (e.key === 'Escape') finishNicknameEdit(); });
   $('chat-toggle').addEventListener('click', () => setCollapsed(!collapsed()));
+  // 이미지: 휴대폰·태블릿(터치 기기)은 🖼 버튼으로 사진첩·카메라에서 고른다 (끌어다 놓기가 없고 붙여넣기도 기기마다 달라서)
+  if (matchMedia('(pointer: coarse)').matches) $('chat-input').placeholder = '메시지 · 🖼 로 사진 보내기';
+  $('chat-pick').addEventListener('click', () => $('chat-file').click());
+  $('chat-file').addEventListener('change', () => {
+    attach($('chat-file').files?.[0]);
+    $('chat-file').value = ''; // 같은 사진을 다시 골라도 동작하게
+  });
   // 이미지: Ctrl+V 로 붙여넣기, 채팅 창에 끌어다 놓기
   $('chat').addEventListener('paste', e => {
     const file = imageFrom(e.clipboardData?.items);

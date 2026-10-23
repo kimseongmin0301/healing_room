@@ -349,8 +349,11 @@
           <button id="chat-attach-clear" class="win" type="button" title="이미지 빼기">✕</button>
         </div>
         <form id="chat-form" class="add">
+          <!-- 터치 기기에서만 보이는 사진 고르기 (PC 는 붙여넣기·끌어다 놓기) -->
+          <button id="chat-pick" class="btn chat-pick" type="button" title="사진 보내기" aria-label="사진 보내기">🖼</button>
+          <input id="chat-file" type="file" accept="image/*" hidden>
           <input id="chat-input" maxlength="300" placeholder="메시지 · 이미지는 붙여넣기(Ctrl+V)나 끌어다 놓기" autocomplete="off">
-          <button class="btn primary">보내기</button>
+          <button id="chat-send" class="btn primary">보내기</button>
         </form>
         <p id="chat-msg" class="msg" role="status"></p>
       </div>
