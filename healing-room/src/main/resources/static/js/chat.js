@@ -1,4 +1,5 @@
-// 방 채팅: 지난 대화 불러오기, 보내기, 실시간으로 받은 메시지 표시, 닉네임(브라우저에 저장)
+// 방 채팅: 지난 대화 불러오기, 보내기, 실시간으로 받은 메시지 표시, 닉네임(브라우저에 저장),
+// 이미지(붙여넣기·끌어다 놓기 → 줄여서 data URL 로 보냄, 누르면 크게 보기)
 import { api, store } from './api.js';
 import { track } from './analytics.js';
 
@@ -12,6 +13,7 @@ const pick = items => items[Math.floor(Math.random() * items.length)];
 let roomId = null;
 let seen = new Set();      // 같은 메시지가 두 번 그려지지 않게 (보낸 응답과 실시간 알림이 겹칠 수 있음)
 let unread = 0;
+let pendingImage = null;   // 보낼 이미지 (data URL)
 let nickname = store.get('chatNickname', null) ?? `${pick(ADJECTIVES)} ${pick(NOUNS)}`;
 store.set('chatNickname', nickname);
 
@@ -44,6 +46,15 @@ function append(message, { scroll = false } = {}) {
   const text = Object.assign(document.createElement('span'), { textContent: message.text }); // textContent: HTML 로 해석하지 않음
   const when = Object.assign(document.createElement('span'), { className: 'when', textContent: timeText(message.sentAt) });
   li.append(who, text, when);
+  // 이미지: 서버가 확인한 data URL(JPEG·PNG·WebP)만 그린다
+  if (typeof message.image === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(message.image)) {
+    const img = Object.assign(document.createElement('img'), {
+      className: 'chat-image', src: message.image, alt: `${message.nickname}님이 보낸 이미지`, loading: 'lazy',
+    });
+    img.addEventListener('click', () => openViewer(message.image));
+    img.addEventListener('load', () => { if (stick) list.scrollTop = list.scrollHeight; }, { once: true });
+    li.append(img);
+  }
   list.append(li);
   if (stick) list.scrollTop = list.scrollHeight;
 }
@@ -77,13 +88,14 @@ async function send(e) {
   e.preventDefault();
   const input = $('chat-input');
   const text = input.value.trim();
-  if (!text || !roomId) return;
+  if ((!text && !pendingImage) || !roomId) return;
   const button = e.submitter;
   button.disabled = true;
   try {
-    const sent = await api('POST', `/api/rooms/${roomId}/chat`, { nickname, text });
-    track('chat_send');
+    const sent = await api('POST', `/api/rooms/${roomId}/chat`, { nickname, text, image: pendingImage });
+    track('chat_send', { image: pendingImage ? 1 : 0 });
     input.value = '';
+    setPendingImage(null);
     message('');
     append(sent, { scroll: true });
   } catch (err) {
@@ -92,6 +104,73 @@ async function send(e) {
     button.disabled = false;
     input.focus();
   }
+}
+
+// ---------------------------------------------------------------- 이미지 (파일로 저장하지 않고 data URL 로 채팅 기록에 넣는다)
+
+const MAX_SIDE = 800;          // 긴 쪽을 이만큼(px)까지 줄인다
+const MAX_LENGTH = 150000;     // data URL 길이 상한 (서버 ChatImage.MAX_LENGTH 160,000 보다 조금 작게)
+
+/** 이미지 파일을 줄이고 압축해 data URL 로. WebP 로 못 만드는 브라우저(사파리 일부)는 JPEG */
+async function compress(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('이미지를 읽지 못했어요'));
+      el.src = url;
+    });
+    let scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    for (let attempt = 0; attempt < 5; attempt++, scale *= 0.75) {
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff'; // 투명한 PNG 를 JPEG 로 바꿀 때 검게 되지 않게
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      for (const quality of [0.82, 0.7, 0.55]) {
+        let data = canvas.toDataURL('image/webp', quality);
+        if (!data.startsWith('data:image/webp')) data = canvas.toDataURL('image/jpeg', quality);
+        if (data.length <= MAX_LENGTH) return data;
+      }
+    }
+    throw new Error('이미지가 너무 커요');
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function setPendingImage(data) {
+  pendingImage = data;
+  $('chat-attach').hidden = !data;
+  if (data) $('chat-attach-img').src = data; else $('chat-attach-img').removeAttribute('src');
+}
+
+async function attach(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  if (file.type === 'image/svg+xml') { message('SVG 이미지는 보낼 수 없어요', true); return; }
+  try {
+    message('이미지를 줄이는 중…');
+    setPendingImage(await compress(file));
+    message('');
+    $('chat-input').focus();
+  } catch (err) {
+    message(err.message, true);
+  }
+}
+
+const imageFrom = items => [...(items ?? [])].find(item => item.kind === 'file' && item.type.startsWith('image/'))?.getAsFile();
+
+function openViewer(src) {
+  $('image-viewer-img').src = src;
+  $('image-viewer').hidden = false;
+}
+
+function closeViewer() {
+  $('image-viewer').hidden = true;
+  $('image-viewer-img').removeAttribute('src');
 }
 
 function startNicknameEdit() {
@@ -129,6 +208,28 @@ export function initChat() {
   $('chat-nick-form').addEventListener('submit', finishNicknameEdit);
   $('chat-nick-input').addEventListener('keydown', e => { if (e.key === 'Escape') finishNicknameEdit(); });
   $('chat-toggle').addEventListener('click', () => setCollapsed(!collapsed()));
+  // 이미지: Ctrl+V 로 붙여넣기, 채팅 창에 끌어다 놓기
+  $('chat').addEventListener('paste', e => {
+    const file = imageFrom(e.clipboardData?.items);
+    if (file) { e.preventDefault(); attach(file); }
+  });
+  $('chat').addEventListener('dragover', e => {
+    if (![...(e.dataTransfer?.types ?? [])].includes('Files')) return;
+    e.preventDefault();
+    $('chat').classList.add('dropping');
+  });
+  $('chat').addEventListener('dragleave', e => { if (!$('chat').contains(e.relatedTarget)) $('chat').classList.remove('dropping'); });
+  $('chat').addEventListener('drop', e => {
+    $('chat').classList.remove('dropping');
+    const file = [...(e.dataTransfer?.files ?? [])].find(f => f.type.startsWith('image/'));
+    if (!file) return;
+    e.preventDefault();
+    if (collapsed()) setCollapsed(false);
+    attach(file);
+  });
+  $('chat-attach-clear').addEventListener('click', () => setPendingImage(null));
+  $('image-viewer').addEventListener('click', closeViewer);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !$('image-viewer').hidden) closeViewer(); });
   setCollapsed(store.get('chatCollapsed', matchMedia('(max-width: 720px)').matches));
 }
 
@@ -158,6 +259,7 @@ export function resetNickname() {
 
 export function leaveChat() {
   roomId = null;
+  setPendingImage(null);
 }
 
 /** 기록 초기화로 대화가 지워졌을 때 화면도 비운다 */

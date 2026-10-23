@@ -53,12 +53,12 @@ class ChatControllerTests {
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("제한")));
         org.mockito.Mockito.verify(chatService, org.mockito.Mockito.never())
                 .send(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
-                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
     void sendReturnsMyMessage() throws Exception {
-        given(chatService.send("cabin", VISITOR, "졸린 고양이", "안녕하세요"))
+        given(chatService.send("cabin", VISITOR, "졸린 고양이", "안녕하세요", null))
                 .willReturn(new ChatMessageResponse("m1", "졸린 고양이", "안녕하세요", 1L, true));
 
         mvc.perform(post("/api/rooms/cabin/chat").header("X-Visitor-Id", VISITOR)
@@ -71,7 +71,7 @@ class ChatControllerTests {
 
     @Test
     void tooFastIs429WithMessage() throws Exception {
-        given(chatService.send("cabin", VISITOR, "졸린 고양이", "안녕하세요")).willThrow(new ChatException.TooFast());
+        given(chatService.send("cabin", VISITOR, "졸린 고양이", "안녕하세요", null)).willThrow(new ChatException.TooFast());
 
         mvc.perform(post("/api/rooms/cabin/chat").header("X-Visitor-Id", VISITOR)
                         .contentType(MediaType.APPLICATION_JSON).content(BODY))
@@ -81,7 +81,7 @@ class ChatControllerTests {
 
     @Test
     void notInRoomIs403() throws Exception {
-        given(chatService.send("cabin", VISITOR, "졸린 고양이", "안녕하세요")).willThrow(new ChatException.NotInRoom());
+        given(chatService.send("cabin", VISITOR, "졸린 고양이", "안녕하세요", null)).willThrow(new ChatException.NotInRoom());
 
         mvc.perform(post("/api/rooms/cabin/chat").header("X-Visitor-Id", VISITOR)
                         .contentType(MediaType.APPLICATION_JSON).content(BODY))

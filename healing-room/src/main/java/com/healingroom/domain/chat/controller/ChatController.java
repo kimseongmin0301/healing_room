@@ -50,6 +50,7 @@ public class ChatController {
         // 욕설·음란어면 30분 제한 (제한 중이어도 403)
         moderation.check(visitorId, ClientRequest.ip(http), "chat", request.nickname(), request.text());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(chatService.send(roomId, visitorId, moderation.mask(request.nickname()), moderation.mask(request.text()))); // 애매한 말은 ** 로
+                .body(chatService.send(roomId, visitorId, moderation.mask(request.nickname()), moderation.mask(request.text()),
+                        request.image())); // 애매한 말은 ** 로
     }
 }

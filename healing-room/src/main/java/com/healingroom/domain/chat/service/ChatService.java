@@ -47,6 +47,9 @@ public class ChatService {
     private final RoomService roomService;
     private final int historySize;
     private final Duration defaultRoomRetention;
+    static final int IMAGE_LIMIT = 3;
+    static final Duration IMAGE_WINDOW = Duration.ofMinutes(1);
+
     private final int rateLimit;
     private final Duration rateWindow;
 
@@ -66,21 +69,34 @@ public class ChatService {
         this.rateWindow = Duration.ofSeconds(rateWindowSeconds);
     }
 
-    /** 메시지 보내기 */
+    /** 메시지 보내기 (이미지 없이) */
     public ChatMessageResponse send(String roomId, String visitorId, String nickname, String text) {
+        return send(roomId, visitorId, nickname, text, null);
+    }
+
+    /**
+     * 메시지 보내기. image 는 data URL(ChatImage)이고 없으면 null. 이미지가 있으면 글은 비어도 된다.
+     * 이미지는 한 사람이 1분에 {@value #IMAGE_LIMIT}장까지 (채팅 도배 방지와 따로 센다)
+     */
+    public ChatMessageResponse send(String roomId, String visitorId, String nickname, String text, String image) {
         if (visitorId == null || !sessions.isPresent(roomId, visitorId)) {
             throw new ChatException.NotInRoom();
         }
-        String cleanText = ChatPolicy.cleanText(text)
-                .orElseThrow(() -> new ChatException.InvalidText(ChatPolicy.TEXT_MAX_LENGTH));
+        String cleanImage = image == null || image.isEmpty() ? null
+                : ChatImage.clean(image).orElseThrow(ChatException.InvalidImage::new);
+        String cleanText = cleanImage != null && (text == null || text.isBlank()) ? ""
+                : ChatPolicy.cleanText(text).orElseThrow(() -> new ChatException.InvalidText(ChatPolicy.TEXT_MAX_LENGTH));
         String cleanNickname = ChatPolicy.cleanNickname(nickname)
                 .orElseThrow(() -> new ChatException.InvalidNickname(ChatPolicy.NICKNAME_MAX_LENGTH));
 
         ChatRecord record = new ChatRecord(UUID.randomUUID().toString(), roomId, visitorId, cleanNickname,
-                cleanText, System.currentTimeMillis());
+                cleanText, System.currentTimeMillis(), cleanImage);
         try {
             if (!repository.tryAcquire(visitorId, rateLimit, rateWindow)) {
                 throw new ChatException.TooFast();
+            }
+            if (cleanImage != null && !repository.tryAcquireImage(visitorId, IMAGE_LIMIT, IMAGE_WINDOW)) {
+                throw new ChatException.TooManyImages(IMAGE_LIMIT);
             }
             boolean defaultRoom = roomService.isDefault(roomId);
             repository.append(record, historySize, defaultRoom ? defaultRoomRetention : USER_ROOM_SAFETY_TTL);

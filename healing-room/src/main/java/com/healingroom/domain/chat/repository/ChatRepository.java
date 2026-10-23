@@ -21,6 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
  * <ul>
  *   <li>{prefix}chat:{roomId}       List. 방의 최근 메시지(JSON), 오래된 것부터</li>
  *   <li>{prefix}chat-rate:{visitor} 도배 방지 카운터 (잠깐 살다 사라짐)</li>
+ *   <li>{prefix}chat-image-rate:{visitor} 이미지 도배 방지 카운터 (1분)</li>
  *   <li>{prefix}chat                pub/sub 채널. 새 메시지를 모든 서버에 알린다</li>
  * </ul>
  */
@@ -87,7 +88,15 @@ public class ChatRepository {
 
     /** window 동안 limit 번까지 허용. 넘으면 false */
     public boolean tryAcquire(String visitorId, int limit, Duration window) {
-        String key = prefix + "chat-rate:" + visitorId;
+        return count(prefix + "chat-rate:" + visitorId, limit, window);
+    }
+
+    /** 이미지: window 동안 limit 장까지 허용 */
+    public boolean tryAcquireImage(String visitorId, int limit, Duration window) {
+        return count(prefix + "chat-image-rate:" + visitorId, limit, window);
+    }
+
+    private boolean count(String key, int limit, Duration window) {
         Long count = redis.opsForValue().increment(key);
         if (count != null && count == 1) {
             redis.expire(key, window);

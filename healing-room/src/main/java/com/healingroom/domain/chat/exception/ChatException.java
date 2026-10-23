@@ -29,6 +29,18 @@ public abstract class ChatException extends ApiException {
         }
     }
 
+    public static class InvalidImage extends ChatException {
+        public InvalidImage() {
+            super(HttpStatus.BAD_REQUEST, "이미지는 JPEG·PNG·WebP 로, 너무 크지 않게 보내 주세요.");
+        }
+    }
+
+    public static class TooManyImages extends ChatException {
+        public TooManyImages(int limit) {
+            super(HttpStatus.TOO_MANY_REQUESTS, "이미지는 1분에 " + limit + "장까지 보낼 수 있어요.");
+        }
+    }
+
     public static class TooFast extends ChatException {
         public TooFast() {
             super(HttpStatus.TOO_MANY_REQUESTS, "조금 천천히 보내 주세요.");

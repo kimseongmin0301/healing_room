@@ -225,6 +225,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 |---|---|---|---|
 | `healing-room:chat:{roomId}` | List (JSON) | 방의 최근 메시지 100개 | 기본 방: 마지막 메시지 후 24시간 / 사용자 방: 닫힐 때 삭제(놓쳐도 7일 뒤 자동 삭제) |
 | `healing-room:chat-rate:{visitorId}` | String (카운터) | 도배 방지 (10초에 6개) | 10초 |
+| `healing-room:chat-image-rate:{visitorId}` | String (카운터) | 이미지 도배 방지 (1분에 3장) | 1분 |
 | `healing-room:chat` | pub/sub 채널 | 새 메시지를 모든 서버에 알림 | - |
 | `healing-room:ban:{id}` | String (JSON) | 욕설·음란어 이용 제한 기록(`BanRecord`: 방문자·IP·어디서·걸린 말·시각) | 30분 (TTL) |
 | `healing-room:ban-ip:{IP}`, `healing-room:ban-visitor:{visitorId}` | String (제한 id) | IP·방문자 번호로 제한 찾기 | 30분 (TTL) |
@@ -235,6 +236,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 3. `RedisConfig` 의 구독자가 받아서 `RoomBroadcaster` 로 이 서버에 접속한 방 사람들에게 `{ type: "chat", message }` 전송. `mine` 은 받는 사람마다 계산하고 **보낸 사람의 방문자 id 는 절대 내보내지 않습니다.**
 4. 방이 닫히면(`RoomClosedEvent`) 그 방의 채팅 키를 지웁니다.
 - 화면은 메시지를 `textContent`로만 넣습니다(HTML로 해석하지 않음). 서버는 HTML을 바꾸지 않습니다.
+- **이미지**: 채팅 창에 붙여넣기(Ctrl+V)·끌어다 놓기로만 붙입니다(파일 선택 버튼 없음). 화면이 최대 800px·WebP(안 되면 JPEG)로 줄여 **data URL** 로 보내고, 서버는 파일로 저장하지 않고 채팅 기록(`ChatRecord.image`, Redis)에 그대로 넣습니다. `ChatImage` 가 JPEG·PNG·WebP 만(SVG 는 스크립트 위험으로 거절), 첫 바이트가 그 형식인지, 160,000자(약 120KB) 이하인지 확인합니다. 이미지만 보낼 때는 글이 비어도 됩니다. 한 사람이 1분에 3장(`healing-room:chat-image-rate:{visitorId}`). 화면에서 누르면 크게 보기(`#image-viewer`). 이미지 내용은 거르지 않으므로 문제가 있으면 방장·관리자 내보내기와 기록 초기화로 지웁니다.
 
 ## 7. 환경변수 (`healing-room/.env`)
 
@@ -274,7 +276,7 @@ Redis는 **다른 서비스와 같은 서버를 공유**합니다. 그 서비스
 | GET | `/api/rooms/{roomId}/recommendations` | 지금 곡 기준 추천 `{ basedOn, similar, similarAvailable, together, popular }` |
 | GET | `/api/rooms/{roomId}/search?q=` | 직접 검색 (방에 있는 사람만) → `[{ youtubeId, title, channel, thumbnail, seconds }]`. 이 사이트에서 재생 가능·라이브 아님·한국 차단 아님만. 1분에 5번 넘으면 429, 할당량 소진·키 없음 503 |
 | GET | `/api/rooms/{roomId}/chat` | 지난 대화 (오래된 것부터, 최대 100개) `[{ id, nickname, text, sentAt, mine }]` |
-| POST | `/api/rooms/{roomId}/chat` | 채팅 보내기 `{ "nickname", "text" }` → 201. 10초에 6개 넘으면 429, Redis 장애 시 503 |
+| POST | `/api/rooms/{roomId}/chat` | 채팅 보내기 `{ "nickname", "text", "image"? }` (image 는 data URL, 있으면 text 는 비어도 됨) → 201. 이미지 형식·크기가 틀리면 400, 1분에 3장 넘으면 429. 10초에 6개 넘으면 429, Redis 장애 시 503 |
 | POST | `/api/rooms/{id}/reset` | **기본 방의 방장** 기록 초기화 (지난 신청곡·투표·통계·채팅) → 204, 아니면 403 |
 | POST | `/api/admin/reset?roomId=` | **관리자** 기록 초기화. roomId 가 없으면 모든 방 + YouTube 검색 캐시 |
 | PUT | `/api/rooms/{id}/settings` | **사람이 만든 방의 방장** 설정 바꾸기 `{ name, themeId, maxPeople }` → 방 사람 모두에게 `room-updated`. 기본 방 403 |
