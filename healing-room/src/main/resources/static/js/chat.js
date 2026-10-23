@@ -93,7 +93,7 @@ async function send(e) {
   const input = $('chat-input');
   const text = input.value.trim();
   if ((!text && !pendingImage) || !roomId) return;
-  const button = e.submitter;
+  const button = e.submitter ?? $('chat-form').querySelector('button'); // 누른 버튼 정보가 없는 제출(일부 키보드)도 견디게
   button.disabled = true;
   try {
     const sent = await api('POST', `/api/rooms/${roomId}/chat`, { nickname, text, image: pendingImage });
