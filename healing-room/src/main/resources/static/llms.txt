@@ -32,4 +32,4 @@
 
 - [서비스 소개](https://healing.kimseongmin.co.kr/about): 사용법, 작동 원리, 개인정보, 만든 사람
 - [테마 모음](https://healing.kimseongmin.co.kr/themes)
-- [소스 코드 (GitHub)](https://github.com/kimseongmin0301/healing_room)
+- [만든 사람 (GitHub)](https://github.com/kimseongmin0301)
