@@ -83,7 +83,11 @@ function setCollapsed(value) {
   $('chat-toggle').textContent = value ? '▔' : '▁';
   $('chat-toggle').title = value ? '펼치기' : '접기';
   store.set('chatCollapsed', value);
-  if (!value) { setUnread(0); list.scrollTop = list.scrollHeight; }
+  if (!value) {
+    restoreHeight(); // 펼칠 때 기억한 높이로
+    setUnread(0);
+    list.scrollTop = list.scrollHeight;
+  }
 }
 
 // ---------------------------------------------------------------- 동작
@@ -189,6 +193,65 @@ async function deleteMessage(id) {
   }
 }
 
+// ---------------------------------------------------------------- 채팅창 높이 바꾸기 (손잡이 끌기, 브라우저에 기억)
+
+const MIN_LIST = 80;          // 대화 목록 최소 높이(px)
+const EDGE = 16;              // 화면 끝과 띄울 여백(px)
+const phoneLayout = () => matchMedia('(max-width: 720px)').matches; // CSS 와 같은 기준: 휴대폰은 채팅창이 위에 붙음
+
+/** 기억한 높이로 (채팅창이 화면에 보일 때만. 안 보일 때는 크기를 잴 수 없다) */
+function restoreHeight() {
+  const saved = store.get('chatHeight', null);
+  if (saved && $('chat').getClientRects().length) applyListHeight(saved);
+}
+
+/** 대화 목록 높이를 정한다 (null 이면 처음 크기). 화면 밖으로 넘치지 않게 맞춘다 */
+function applyListHeight(height) {
+  const chat = $('chat');
+  if (height == null) {
+    list.style.height = list.style.maxHeight = list.style.flex = chat.style.maxHeight = '';
+    return;
+  }
+  const rect = chat.getBoundingClientRect();
+  const others = chat.offsetHeight - list.offsetHeight;          // 머리·입력칸 등 목록을 뺀 높이
+  const room = phoneLayout() ? innerHeight - rect.top - EDGE    // 위에 붙음: 아래로 늘어날 수 있는 만큼
+    : rect.bottom - EDGE;                                         // 아래에 붙음: 위로 늘어날 수 있는 만큼
+  const h = Math.round(Math.max(MIN_LIST, Math.min(height, room - others)));
+  chat.style.maxHeight = 'none';
+  Object.assign(list.style, { height: `${h}px`, maxHeight: 'none', flex: 'none' });
+  return h;
+}
+
+function initResize() {
+  const handle = $('chat-resize');
+  let startY = 0;
+  let startH = 0;
+  handle.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    startY = e.clientY;
+    startH = list.offsetHeight;
+    handle.setPointerCapture(e.pointerId);
+    $('chat').classList.add('resizing');
+  });
+  handle.addEventListener('pointermove', e => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
+    const dy = e.clientY - startY;
+    applyListHeight(startH + (phoneLayout() ? dy : -dy)); // PC 는 위로 끌면 커지고, 휴대폰은 아래로 끌면 커진다
+  });
+  const finish = e => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
+    handle.releasePointerCapture(e.pointerId);
+    $('chat').classList.remove('resizing');
+    store.set('chatHeight', list.offsetHeight);
+    if (nearBottom()) list.scrollTop = list.scrollHeight;
+  };
+  handle.addEventListener('pointerup', finish);
+  handle.addEventListener('pointercancel', finish);
+  handle.addEventListener('dblclick', () => { store.set('chatHeight', null); applyListHeight(null); });
+  // 창 크기가 바뀌면 기억한 높이를 다시 화면에 맞춘다
+  addEventListener('resize', restoreHeight);
+}
+
 function startNicknameEdit() {
   $('chat-nick').hidden = true;
   $('chat-nick-form').hidden = false;
@@ -224,6 +287,7 @@ export function initChat() {
   $('chat-nick-form').addEventListener('submit', finishNicknameEdit);
   $('chat-nick-input').addEventListener('keydown', e => { if (e.key === 'Escape') finishNicknameEdit(); });
   $('chat-toggle').addEventListener('click', () => setCollapsed(!collapsed()));
+  initResize();
   // 이미지: 휴대폰·태블릿(터치 기기)은 📷 버튼으로 사진첩·카메라에서 고른다 (끌어다 놓기가 없고 붙여넣기도 기기마다 달라서)
   if (matchMedia('(pointer: coarse)').matches) $('chat-input').placeholder = '메시지 · 📷 로 사진 보내기';
   $('chat-pick').addEventListener('click', () => $('chat-file').click());
@@ -267,6 +331,7 @@ export async function enterChat(id) {
     const history = await api('GET', `/api/rooms/${id}/chat`);
     if (roomId !== id) return;
     history.forEach(m => append(m));
+    if (!collapsed()) restoreHeight(); // 방에 들어와 채팅창이 보인 뒤에 기억한 높이로
     list.scrollTop = list.scrollHeight;
   } catch (e) {
     message(e.message, true);
